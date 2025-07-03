@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
@@ -9,6 +10,7 @@ import importRoutes from './routes/import.js';
 import adminRoutes from './routes/admin.js';
 import scrapingRoutes from './routes/scraping.js';
 import healthRoutes from './routes/health.js';
+import authRoutes from './routes/auth.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -24,6 +26,7 @@ app.use('/import', importRoutes);
 app.use('/admin', adminRoutes);
 app.use('/scrape', scrapingRoutes);
 app.use('/health', healthRoutes);
+app.use('/auth', authRoutes);
 
 app.get('/ping', async (req, res) => {
   try {

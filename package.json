@@ -3,29 +3,36 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-"scripts": {
-  "dev": "tsx --watch src/index.ts",
-  "build": "npx prisma generate && npx prisma db push && tsc || true",
-  "start": "node dist/index.js",
-  "postinstall": "npx prisma generate",
-  "db:deploy": "npx prisma db push",
-  "db:studio": "npx prisma studio"
-},
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "build": "npx prisma generate && npx prisma db push && tsc || true",
+    "start": "node dist/index.js",
+    "postinstall": "npx prisma generate",
+    "db:deploy": "npx prisma db push",
+    "db:studio": "npx prisma studio"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.10.1",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.0.1",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
     "node-fetch": "^2.7.0",
+    "nodemailer": "^7.0.4",
     "prisma": "^6.10.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.7",
     "@types/node-fetch": "^2.6.12",
+    "@types/nodemailer": "^6.4.17",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"

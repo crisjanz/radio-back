@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  password        String   // Hashed password
+  resetToken      String?  // For password recovery
+  resetTokenExpiry DateTime? // When reset token expires
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
 model Station {
   id              Int     @id @default(autoincrement())
   name            String

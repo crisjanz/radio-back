@@ -60,13 +60,13 @@ router.get('/search', async (req: Request, res: Response) => {
     const stations = await prisma.station.findMany({
       where: {
         OR: [
-          { name: { contains: searchTerm } },
-          { country: { contains: searchTerm } },
-          { city: { contains: searchTerm } },
-          { genre: { contains: searchTerm } },
-          { type: { contains: searchTerm } },
-          { description: { contains: searchTerm } },
-          { tags: { contains: searchTerm } }
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { country: { contains: searchTerm, mode: 'insensitive' } },
+          { city: { contains: searchTerm, mode: 'insensitive' } },
+          { genre: { contains: searchTerm, mode: 'insensitive' } },
+          { type: { contains: searchTerm, mode: 'insensitive' } },
+          { description: { contains: searchTerm, mode: 'insensitive' } },
+          { tags: { contains: searchTerm, mode: 'insensitive' } }
         ]
       },
       take: 100 // Limit results

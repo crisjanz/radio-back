@@ -1,67 +1,114 @@
-const { PrismaClient } = require('@prisma/client');
+const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 
-// Create Prisma client specifically for SQLite database
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: 'file:./prisma/stations.db'
-    }
-  }
-});
-
-async function exportData() {
-  try {
-    console.log('📊 Exporting all stations from local SQLite database...');
+async function exportSQLiteData() {
+  return new Promise((resolve, reject) => {
+    console.log('🔄 Exporting enhanced data from SQLite database...');
     
-    const stations = await prisma.station.findMany({
-      orderBy: { id: 'asc' }
+    // Connect to SQLite database
+    const db = new sqlite3.Database('/Users/cristianjanz/radio-back/prisma/stations.db', (err) => {
+      if (err) {
+        console.error('❌ Failed to connect to SQLite database:', err);
+        reject(err);
+        return;
+      }
+      console.log('✅ Connected to SQLite database');
     });
     
-    console.log(`✅ Found ${stations.length} stations to export`);
+    // Query for stations with enhanced data
+    const query = `
+      SELECT id, name, description, address, phone, email, latitude, longitude, 
+             city, state, facebookUrl, twitterUrl, instagramUrl, youtubeUrl,
+             favicon, logo, homepage, language, frequency, establishedYear,
+             owner, bitrate, codec, timezone, schedule, programs, tags
+      FROM Station 
+      WHERE description IS NOT NULL 
+         OR address IS NOT NULL 
+         OR phone IS NOT NULL 
+         OR email IS NOT NULL 
+         OR latitude IS NOT NULL 
+         OR longitude IS NOT NULL
+         OR city IS NOT NULL 
+         OR state IS NOT NULL
+         OR facebookUrl IS NOT NULL 
+         OR twitterUrl IS NOT NULL 
+         OR instagramUrl IS NOT NULL 
+         OR youtubeUrl IS NOT NULL
+         OR favicon IS NOT NULL 
+         OR logo IS NOT NULL
+         OR language IS NOT NULL 
+         OR frequency IS NOT NULL 
+         OR establishedYear IS NOT NULL
+         OR owner IS NOT NULL 
+         OR timezone IS NOT NULL 
+         OR schedule IS NOT NULL 
+         OR programs IS NOT NULL 
+         OR tags IS NOT NULL
+    `;
     
-    if (stations.length === 0) {
-      console.log('⚠️ No stations found in local database');
-      return;
-    }
-    
-    // Export to JSON file
-    const exportData = {
-      timestamp: new Date().toISOString(),
-      totalStations: stations.length,
-      stations: stations
-    };
-    
-    fs.writeFileSync('/Users/cristianjanz/radio-back/stations-export.json', JSON.stringify(exportData, null, 2));
-    console.log('💾 Data exported to /Users/cristianjanz/radio-back/stations-export.json');
-    
-    // Show summary
-    const countries = [...new Set(stations.map(s => s.country))];
-    const genres = [...new Set(stations.map(s => s.genre).filter(g => g))];
-    const withRatings = stations.filter(s => s.votes || s.clickcount);
-    
-    console.log('\n📈 Export Summary:');
-    console.log(`   • Total stations: ${stations.length}`);
-    console.log(`   • Countries: ${countries.length}`);
-    console.log(`   • Genres: ${genres.length}`);
-    console.log(`   • With ratings: ${withRatings.length}`);
-    console.log(`   • Top countries: ${countries.slice(0, 5).join(', ')}`);
-    
-    // Show sample station for verification
-    if (stations.length > 0) {
-      console.log('\n🎯 Sample station:');
-      const sample = stations[0];
-      console.log(`   • Name: ${sample.name}`);
-      console.log(`   • Country: ${sample.country}`);
-      console.log(`   • URL: ${sample.streamUrl}`);
-      console.log(`   • Created: ${sample.createdAt}`);
-    }
-    
-  } catch (error) {
-    console.error('❌ Export failed:', error);
-  } finally {
-    await prisma.$disconnect();
-  }
+    db.all(query, [], (err, rows) => {
+      if (err) {
+        console.error('❌ Query failed:', err);
+        reject(err);
+        return;
+      }
+      
+      console.log(`✅ Found ${rows.length} stations with enhanced data`);
+      
+      // Process the data to create clean updates
+      const updates = rows.map(station => {
+        const { id, name, ...fields } = station;
+        
+        // Clean up null/empty values
+        const cleanFields = {};
+        Object.entries(fields).forEach(([key, value]) => {
+          if (value !== null && value !== '' && value !== undefined) {
+            cleanFields[key] = value;
+          }
+        });
+        
+        return {
+          id,
+          name,
+          fields: cleanFields
+        };
+      }).filter(update => Object.keys(update.fields).length > 0);
+      
+      console.log(`📋 Prepared ${updates.length} stations for sync`);
+      
+      // Save to file
+      const filename = '/Users/cristianjanz/radio-back/sync-payload.json';
+      fs.writeFileSync(filename, JSON.stringify(updates, null, 2));
+      
+      console.log(`💾 Saved sync payload to: ${filename}`);
+      
+      // Show summary
+      console.log('\n📊 Enhanced data summary:');
+      const fieldCounts = {};
+      
+      updates.forEach(update => {
+        Object.keys(update.fields).forEach(field => {
+          fieldCounts[field] = (fieldCounts[field] || 0) + 1;
+        });
+      });
+      
+      Object.entries(fieldCounts)
+        .sort(([,a], [,b]) => b - a)
+        .forEach(([field, count]) => {
+          console.log(`   • ${field}: ${count} stations`);
+        });
+      
+      db.close((err) => {
+        if (err) {
+          console.error('❌ Error closing database:', err);
+        } else {
+          console.log('\n✅ SQLite database closed');
+          console.log('🚀 Ready to sync to live database!');
+        }
+        resolve();
+      });
+    });
+  });
 }
 
-exportData();
+exportSQLiteData().catch(console.error);
