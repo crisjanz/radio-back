@@ -525,4 +525,200 @@ router.get('/stats', async (req: Request, res: Response) => {
   }
 });
 
+// Check how many stations are missing ratings
+router.get('/missing-ratings', async (req: Request, res: Response) => {
+  try {
+    const [
+      missingVotes,
+      missingClickcount,
+      missingUuid,
+      missingAny,
+      totalStations
+    ] = await Promise.all([
+      prisma.station.count({ where: { votes: null } }),
+      prisma.station.count({ where: { clickcount: null } }),
+      prisma.station.count({ where: { radioBrowserUuid: null } }),
+      prisma.station.count({ 
+        where: {
+          OR: [
+            { votes: null },
+            { clickcount: null },
+            { radioBrowserUuid: null }
+          ]
+        }
+      }),
+      prisma.station.count()
+    ]);
+    
+    res.json({
+      success: true,
+      summary: {
+        totalStations,
+        missingVotes,
+        missingClickcount,
+        missingUuid,
+        missingAny,
+        percentageComplete: Math.round(((totalStations - missingAny) / totalStations) * 100)
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking missing ratings:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to check missing ratings'
+    });
+  }
+});
+
+// Bulk update missing ratings for existing stations
+router.post('/update-ratings', async (req: Request, res: Response) => {
+  try {
+    const { maxStations = 100, forceUpdate = false } = req.body;
+    
+    console.log('🔄 Starting bulk ratings update...');
+    
+    // Find stations missing rating data or with force update
+    const stationsToUpdate = await prisma.station.findMany({
+      where: forceUpdate ? {} : {
+        OR: [
+          { votes: null },
+          { clickcount: null },
+          { radioBrowserUuid: null }
+        ]
+      },
+      take: maxStations,
+      orderBy: { createdAt: 'desc' } // Start with newest stations
+    });
+    
+    console.log(`📊 Found ${stationsToUpdate.length} stations to update`);
+    
+    let updated = 0;
+    let notFound = 0;
+    let errors = 0;
+    const results = [];
+    
+    for (const station of stationsToUpdate) {
+      try {
+        console.log(`🔍 Searching for: "${station.name}" - ${station.country}`);
+        
+        // Search Radio Browser for this station by name and country
+        const searchParams = new URLSearchParams({
+          name: station.name,
+          country: station.country,
+          limit: '10'
+        });
+        
+        const response = await fetch(`https://de1.api.radio-browser.info/json/stations/search?${searchParams}`);
+        
+        if (!response.ok) {
+          console.log(`❌ API error for ${station.name}`);
+          errors++;
+          continue;
+        }
+        
+        const rbStations = await response.json() as any[];
+        
+        // Try to find exact match
+        let match = rbStations.find(rb => 
+          rb.name.toLowerCase().trim() === station.name.toLowerCase().trim() &&
+          rb.country === station.country
+        );
+        
+        // If no exact match, try URL matching
+        if (!match && station.streamUrl) {
+          match = rbStations.find(rb => 
+            rb.url === station.streamUrl || 
+            rb.url_resolved === station.streamUrl
+          );
+        }
+        
+        // If still no match, try partial name matching
+        if (!match) {
+          match = rbStations.find(rb => {
+            const rbName = rb.name.toLowerCase().replace(/[^\w\s]/g, '');
+            const stationName = station.name.toLowerCase().replace(/[^\w\s]/g, '');
+            return rbName.includes(stationName) || stationName.includes(rbName);
+          });
+        }
+        
+        if (match) {
+          // Update station with Radio Browser data
+          await prisma.station.update({
+            where: { id: station.id },
+            data: {
+              votes: match.votes || null,
+              clickcount: match.clickcount || null,
+              radioBrowserUuid: match.stationuuid || null,
+              // Also update other potentially missing fields
+              favicon: station.favicon || match.favicon || null,
+              homepage: station.homepage || match.homepage || null,
+              bitrate: station.bitrate || match.bitrate || null,
+              codec: station.codec || match.codec || null,
+              updatedAt: new Date()
+            }
+          });
+          
+          console.log(`✅ Updated: ${station.name} - votes: ${match.votes}, clicks: ${match.clickcount}`);
+          
+          results.push({
+            stationId: station.id,
+            name: station.name,
+            country: station.country,
+            votes: match.votes,
+            clickcount: match.clickcount,
+            radioBrowserUuid: match.stationuuid,
+            status: 'updated'
+          });
+          
+          updated++;
+        } else {
+          console.log(`❌ No match found for: ${station.name}`);
+          results.push({
+            stationId: station.id,
+            name: station.name,
+            country: station.country,
+            status: 'not_found'
+          });
+          notFound++;
+        }
+        
+        // Small delay to be nice to Radio Browser API
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        console.error(`❌ Error updating ${station.name}:`, error);
+        errors++;
+        
+        results.push({
+          stationId: station.id,
+          name: station.name,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          status: 'error'
+        });
+      }
+    }
+    
+    console.log(`🎉 Bulk update complete: ${updated} updated, ${notFound} not found, ${errors} errors`);
+    
+    res.json({
+      success: true,
+      summary: {
+        totalProcessed: stationsToUpdate.length,
+        updated,
+        notFound,
+        errors
+      },
+      results
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in bulk ratings update:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Bulk update failed'
+    });
+  }
+});
+
 export default router;

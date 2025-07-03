@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: radio-backend
+    env: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://streemr_user:uy9IcetHC6stgDxvTT5ZewRMGk5pTbDY@dpg-d1iuiqemcj7s739ua480-a.oregon-postgres.render.com/streemr

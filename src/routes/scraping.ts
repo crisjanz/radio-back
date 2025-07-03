@@ -116,6 +116,8 @@ router.post('/business', async (req: Request, res: Response): Promise<void> => {
       phone: null,
       email: null,
       website: null,
+      favicon: null,
+      logo: null,
       socialMedia: {},
       coordinates: null
     };
@@ -461,6 +463,164 @@ router.post('/business', async (req: Request, res: Response): Promise<void> => {
         businessInfo.website = match[1];
         break;
       }
+    }
+
+    // Extract favicon and logo images
+    console.log('🖼️ Searching for favicon and logo images...');
+    
+    // Get base URL for relative path resolution
+    const urlObj = new URL(finalUrl);
+    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    
+    const logoPatterns = [
+      // Favicon patterns (prioritize higher quality formats)
+      /<link[^>]*rel="icon"[^>]*href="([^"]+)"/gi,
+      /<link[^>]*rel="shortcut icon"[^>]*href="([^"]+)"/gi,
+      /<link[^>]*rel="apple-touch-icon"[^>]*href="([^"]+)"/gi,
+      /<link[^>]*rel="apple-touch-icon-precomposed"[^>]*href="([^"]+)"/gi,
+      /<link[^>]*rel="mask-icon"[^>]*href="([^"]+)"/gi,
+      
+      // Open Graph and Twitter Card images
+      /property="og:image"[^>]*content="([^"]+)"/gi,
+      /property="og:image:url"[^>]*content="([^"]+)"/gi,
+      /name="twitter:image"[^>]*content="([^"]+)"/gi,
+      
+      // Common logo image patterns in HTML
+      /<img[^>]*src="([^"]*logo[^"]*\.(png|jpg|jpeg|svg|gif|webp))"[^>]*/gi,
+      /<img[^>]*src="([^"]*brand[^"]*\.(png|jpg|jpeg|svg|gif|webp))"[^>]*/gi,
+      /<img[^>]*src="([^"]*header[^"]*\.(png|jpg|jpeg|svg|gif|webp))"[^>]*/gi,
+      /<img[^>]*class="[^"]*logo[^"]*"[^>]*src="([^"]+)"/gi,
+      /<img[^>]*id="[^"]*logo[^"]*"[^>]*src="([^"]+)"/gi,
+      /<img[^>]*alt="[^"]*logo[^"]*"[^>]*src="([^"]+)"/gi,
+      
+      // CSS background images
+      /background-image:\s*url\(['"]?([^'")\s]+logo[^'")\s]*\.(png|jpg|jpeg|svg|gif|webp))['"]?\)/gi,
+      
+      // JSON-LD structured data
+      /"logo":"([^"]+\.(png|jpg|jpeg|svg|gif|webp))"/gi,
+      /"image":"([^"]+logo[^"]*\.(png|jpg|jpeg|svg|gif|webp))"/gi,
+      
+      // Common website patterns
+      /src="([^"]*\/logo\.(png|jpg|jpeg|svg|gif|webp))"/gi,
+      /src="([^"]*\/images\/logo[^"]*\.(png|jpg|jpeg|svg|gif|webp))"/gi,
+      /href="([^"]*\/favicon\.(ico|png|svg))"/gi,
+    ];
+    
+    const foundLogos = [];
+    
+    for (const pattern of logoPatterns) {
+      const matches = [...html.matchAll(pattern)];
+      for (const match of matches) {
+        if (match && (match[1] || match[2])) {
+          let logoUrl = match[1] || match[2];
+          
+          // Skip data URLs, empty URLs, and obvious placeholders
+          if (!logoUrl || 
+              logoUrl.startsWith('data:') || 
+              logoUrl.includes('placeholder') ||
+              logoUrl.includes('default') ||
+              logoUrl.includes('example') ||
+              logoUrl.length < 4) {
+            continue;
+          }
+          
+          // Convert relative URLs to absolute
+          if (logoUrl.startsWith('/')) {
+            logoUrl = baseUrl + logoUrl;
+          } else if (logoUrl.startsWith('./')) {
+            logoUrl = baseUrl + logoUrl.substring(1);
+          } else if (!logoUrl.startsWith('http')) {
+            logoUrl = baseUrl + '/' + logoUrl;
+          }
+          
+          // Clean up URL
+          logoUrl = logoUrl.split('?')[0]; // Remove query parameters
+          logoUrl = logoUrl.split('#')[0]; // Remove fragments
+          
+          foundLogos.push({
+            url: logoUrl,
+            type: logoUrl.includes('favicon') || logoUrl.includes('icon') ? 'favicon' : 'logo',
+            quality: 0 // Will be scored below
+          });
+        }
+      }
+    }
+    
+    // Score and prioritize logos/favicons
+    const scoredLogos = foundLogos.map(logo => {
+      let score = 0;
+      const url = logo.url.toLowerCase();
+      
+      // Format preferences (higher quality formats get more points)
+      if (url.endsWith('.svg')) score += 8;  // Vector, best quality
+      if (url.endsWith('.png')) score += 6;  // Good for logos
+      if (url.endsWith('.webp')) score += 5; // Modern format
+      if (url.endsWith('.jpg') || url.endsWith('.jpeg')) score += 3; // Acceptable
+      if (url.endsWith('.gif')) score += 2;  // Usually animated or low quality
+      if (url.endsWith('.ico')) score += 4;  // Standard favicon
+      
+      // Size hints in filename/path (bigger is usually better for logos)
+      if (url.includes('192x192') || url.includes('256x256')) score += 6;
+      if (url.includes('180x180') || url.includes('152x152')) score += 5;
+      if (url.includes('144x144') || url.includes('120x120')) score += 4;
+      if (url.includes('96x96') || url.includes('72x72')) score += 3;
+      if (url.includes('48x48') || url.includes('32x32')) score += 2;
+      if (url.includes('16x16')) score += 1;
+      
+      // Logo-specific scoring
+      if (logo.type === 'logo') {
+        if (url.includes('logo')) score += 5;
+        if (url.includes('brand')) score += 4;
+        if (url.includes('header')) score += 3;
+        if (url.includes('/images/')) score += 2;
+        if (url.includes('/assets/')) score += 2;
+      }
+      
+      // Favicon-specific scoring
+      if (logo.type === 'favicon') {
+        if (url.includes('favicon')) score += 5;
+        if (url.includes('apple-touch-icon')) score += 4;
+        if (url.includes('icon')) score += 3;
+      }
+      
+      // Path quality (shorter paths usually better)
+      const pathParts = url.split('/').length;
+      if (pathParts <= 4) score += 3; // Direct path
+      if (pathParts <= 6) score += 1; // Reasonable path
+      
+      // Penalize suspicious URLs
+      if (url.includes('cdn') && !url.includes('amazonaws')) score -= 2; // External CDNs might not work
+      if (url.includes('temp') || url.includes('tmp')) score -= 5;
+      if (url.includes('cache')) score -= 2;
+      
+      console.log(`🖼️ Logo candidate: "${logo.url}" (type: ${logo.type}, score: ${score})`);
+      return { ...logo, quality: score };
+    });
+    
+    // Sort by quality and extract best favicon and logo
+    scoredLogos.sort((a, b) => b.quality - a.quality);
+    
+    // Find best favicon
+    const bestFavicon = scoredLogos.find(logo => logo.type === 'favicon');
+    if (bestFavicon) {
+      businessInfo.favicon = bestFavicon.url;
+      console.log(`🔖 Found favicon: ${bestFavicon.url} (score: ${bestFavicon.quality})`);
+    }
+    
+    // Find best logo (that's not the same as favicon)
+    const bestLogo = scoredLogos.find(logo => 
+      logo.type === 'logo' && 
+      logo.url !== businessInfo.favicon
+    );
+    if (bestLogo) {
+      businessInfo.logo = bestLogo.url;
+      console.log(`🎨 Found logo: ${bestLogo.url} (score: ${bestLogo.quality})`);
+    }
+    
+    // Fallback: if no favicon found, use the best overall image
+    if (!businessInfo.favicon && scoredLogos.length > 0) {
+      businessInfo.favicon = scoredLogos[0].url;
+      console.log(`🔖 Using best image as favicon: ${scoredLogos[0].url}`);
     }
 
     // Clean up extracted data

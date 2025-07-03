@@ -3,12 +3,12 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 
 // Import modular route handlers
-import stationRoutes from './routes/stations';
-import metadataRoutes from './routes/metadata';
-import importRoutes from './routes/import';
-import adminRoutes from './routes/admin';
-import scrapingRoutes from './routes/scraping';
-import healthRoutes from './routes/health';
+import stationRoutes from './routes/stations.js';
+import metadataRoutes from './routes/metadata.js';
+import importRoutes from './routes/import.js';
+import adminRoutes from './routes/admin.js';
+import scrapingRoutes from './routes/scraping.js';
+import healthRoutes from './routes/health.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -95,9 +95,14 @@ process.on('uncaughtException', (error) => {
 });
 
 // Start server
-app.listen(3001, '0.0.0.0', () => {
-  console.log("✅ Server is running on http://0.0.0.0:3001");
-  console.log("📱 Mobile access: http://192.168.1.69:3001");
+const PORT = process.env.PORT || 3001;
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Server is running on http://${HOST}:${PORT}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log("📱 Mobile access: http://192.168.1.69:3001");
+  }
   console.log("🔗 Available routes:");
   console.log("   • /stations - Station CRUD operations");
   console.log("   • /metadata - Stream metadata endpoints");

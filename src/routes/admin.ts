@@ -233,7 +233,7 @@ router.get('/stats', async (req: Request, res: Response) => {
 });
 
 // Enable/disable a station
-router.patch('/stations/:id/toggle', async (req: Request, res: Response) => {
+router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const stationId = parseInt(req.params.id);
     const { isActive, adminNotes } = req.body;
@@ -278,7 +278,7 @@ router.patch('/stations/:id/toggle', async (req: Request, res: Response) => {
 });
 
 // Update station admin notes
-router.patch('/stations/:id/notes', async (req: Request, res: Response) => {
+router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const stationId = parseInt(req.params.id);
     const { adminNotes } = req.body;
@@ -307,7 +307,7 @@ router.patch('/stations/:id/notes', async (req: Request, res: Response) => {
 });
 
 // Reset user reports for a station
-router.patch('/stations/:id/reset-reports', async (req: Request, res: Response) => {
+router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const stationId = parseInt(req.params.id);
     
@@ -335,7 +335,7 @@ router.patch('/stations/:id/reset-reports', async (req: Request, res: Response) 
 });
 
 // Report a station as not working (user endpoint)
-router.post('/stations/:id/report', async (req: Request, res: Response) => {
+router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const stationId = parseInt(req.params.id);
     
