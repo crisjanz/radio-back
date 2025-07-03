@@ -5,11 +5,16 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx --watch src/index.ts",
+    "dev:local": "dotenv -e .env.development -- tsx --watch src/index.ts",
     "build": "npx prisma generate && npx prisma db push && tsc || true",
+    "build:local": "dotenv -e .env.development -- npx prisma generate --schema=prisma/schema.dev.prisma && dotenv -e .env.development -- npx prisma db push --schema=prisma/schema.dev.prisma && tsc || true",
     "start": "node dist/index.js",
     "postinstall": "npx prisma generate",
     "db:deploy": "npx prisma db push",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "db:studio:local": "dotenv -e .env.development -- npx prisma studio --schema=prisma/schema.dev.prisma",
+    "db:init:local": "dotenv -e .env.development -- npx prisma generate --schema=prisma/schema.dev.prisma && dotenv -e .env.development -- npx prisma db push --schema=prisma/schema.dev.prisma",
+    "db:seed:local": "dotenv -e .env.development -- node export-sqlite-data.js"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +38,7 @@
     "@types/node": "^24.0.7",
     "@types/node-fetch": "^2.6.12",
     "@types/nodemailer": "^6.4.17",
+    "dotenv-cli": "^7.4.2",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"

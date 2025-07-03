@@ -4,7 +4,33 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./stations.db"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  password        String   // Hashed password
+  resetToken      String?  // For password recovery
+  resetTokenExpiry DateTime? // When reset token expires
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  
+  // Relations
+  favorites       UserFavorites[]
+}
+
+model UserFavorites {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  stationId  Int
+  createdAt  DateTime @default(now())
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Unique constraint to prevent duplicate favorites
+  @@unique([userId, stationId])
 }
 
 model Station {
