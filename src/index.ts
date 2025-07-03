@@ -25,6 +25,10 @@ app.use('/admin', adminRoutes);
 app.use('/scrape', scrapingRoutes);
 app.use('/health', healthRoutes);
 
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
 // Legacy route endpoints for backward compatibility
 app.get('/stations/countries', async (req: Request, res: Response) => {
   try {
