@@ -27,8 +27,7 @@ app.use('/health', healthRoutes);
 
 app.get('/ping', async (req, res) => {
   try {
-    // Replace this with a lightweight query
-    const count = await db.station.count(); // Prisma example
+    const count = await prisma.station.count(); // ✅ FIXED
     res.json({ ok: true, stations: count });
   } catch (err) {
     console.error('Ping DB failed:', err);
