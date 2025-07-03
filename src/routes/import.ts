@@ -203,7 +203,7 @@ router.post('/radio-browser', async (req: Request, res: Response) => {
 
     console.log(`✅ Import complete: ${imported} imported, ${skipped} skipped`);
 
-    res.json({
+    return res.json({
       success: true,
       imported,
       skipped,
@@ -213,7 +213,7 @@ router.post('/radio-browser', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('❌ Error during Radio-Browser import:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Import failed'
     });
@@ -253,7 +253,7 @@ router.post('/quick-start', async (req: Request, res: Response) => {
 
     console.log(`🎉 Quick import complete: ${totalImported} total imported, ${totalSkipped} total skipped`);
 
-    res.json({
+    return res.json({
       success: true,
       imported: totalImported,
       skipped: totalSkipped,
@@ -262,7 +262,7 @@ router.post('/quick-start', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('❌ Error during quick import:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Quick import failed'
     });
@@ -282,10 +282,10 @@ router.get('/countries', async (req: Request, res: Response) => {
       .map(country => country.name)
       .sort();
     
-    res.json({ countries: countryNames });
+    return res.json({ countries: countryNames });
   } catch (error) {
     console.error('❌ Error fetching countries:', error);
-    res.status(500).json({ error: 'Failed to fetch countries' });
+    return res.status(500).json({ error: 'Failed to fetch countries' });
   }
 });
 
@@ -317,10 +317,10 @@ router.get('/states/:country', async (req: Request, res: Response) => {
     
     const stateNames = Array.from(stateSet).sort();
     
-    res.json({ states: stateNames });
+    return res.json({ states: stateNames });
   } catch (error) {
     console.error('❌ Error fetching states:', error);
-    res.status(500).json({ error: 'Failed to fetch states' });
+    return res.status(500).json({ error: 'Failed to fetch states' });
   }
 });
 
@@ -394,10 +394,10 @@ router.get('/preview', async (req: Request, res: Response) => {
     
     console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations`);
     
-    res.json({ stations: filteredStations });
+    return res.json({ stations: filteredStations });
   } catch (error) {
     console.error('❌ Error fetching preview stations:', error);
-    res.status(500).json({ error: 'Failed to fetch preview stations' });
+    return res.status(500).json({ error: 'Failed to fetch preview stations' });
   }
 });
 
@@ -476,7 +476,7 @@ router.post('/stations', async (req: Request, res: Response) => {
 
     console.log(`🎉 Import complete: ${imported} imported, ${duplicates} duplicates, ${errors.length} errors`);
 
-    res.json({
+    return res.json({
       success: true,
       imported,
       duplicates,
@@ -485,7 +485,7 @@ router.post('/stations', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('❌ Error importing stations:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Import failed'
     });
@@ -513,7 +513,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       })
     ]);
 
-    res.json({
+    return res.json({
       totalStations,
       countries: countryCounts.length,
       topCountries: countryCounts.slice(0, 10),
@@ -521,7 +521,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('❌ Error fetching import stats:', error);
-    res.status(500).json({ error: 'Failed to fetch import statistics' });
+    return res.status(500).json({ error: 'Failed to fetch import statistics' });
   }
 });
 
@@ -550,7 +550,7 @@ router.get('/missing-ratings', async (req: Request, res: Response) => {
       prisma.station.count()
     ]);
     
-    res.json({
+    return res.json({
       success: true,
       summary: {
         totalStations,
@@ -564,7 +564,7 @@ router.get('/missing-ratings', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error checking missing ratings:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to check missing ratings'
     });
@@ -701,7 +701,7 @@ router.post('/update-ratings', async (req: Request, res: Response) => {
     
     console.log(`🎉 Bulk update complete: ${updated} updated, ${notFound} not found, ${errors} errors`);
     
-    res.json({
+    return res.json({
       success: true,
       summary: {
         totalProcessed: stationsToUpdate.length,
@@ -714,7 +714,7 @@ router.post('/update-ratings', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error in bulk ratings update:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Bulk update failed'
     });

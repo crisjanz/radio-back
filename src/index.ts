@@ -95,7 +95,7 @@ process.on('uncaughtException', (error) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '0.0.0.0';
 
 app.listen(PORT, HOST, () => {

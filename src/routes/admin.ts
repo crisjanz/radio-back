@@ -19,13 +19,13 @@ router.get('/stations/normalize', async (req: Request, res: Response) => {
     });
     
     // For now, return empty pending changes - the frontend will analyze
-    res.json({
+    return res.json({
       stations,
       pendingChanges: []
     });
   } catch (error) {
     console.error('❌ Error fetching stations for normalization:', error);
-    res.status(500).json({ error: 'Failed to fetch stations' });
+    return res.status(500).json({ error: 'Failed to fetch stations' });
   }
 });
 
@@ -147,10 +147,10 @@ router.post('/stations/analyze', async (req: Request, res: Response) => {
     }
     
     console.log(`🔍 Analysis complete: found ${pendingChanges.length} suggested changes`);
-    res.json({ pendingChanges });
+    return res.json({ pendingChanges });
   } catch (error) {
     console.error('❌ Error analyzing stations:', error);
-    res.status(500).json({ error: 'Failed to analyze stations' });
+    return res.status(500).json({ error: 'Failed to analyze stations' });
   }
 });
 
@@ -160,8 +160,7 @@ router.post('/stations/apply-normalization', async (req: Request, res: Response)
     const { changes } = req.body;
     
     if (!Array.isArray(changes)) {
-      res.status(400).json({ error: 'Changes must be an array' });
-      return;
+      return res.status(400).json({ error: 'Changes must be an array' });
     }
     
     let updated = 0;
@@ -183,17 +182,17 @@ router.post('/stations/apply-normalization', async (req: Request, res: Response)
     }
     
     console.log(`✅ Applied ${updated} normalization changes`);
-    res.json({ updated });
+    return res.json({ updated });
   } catch (error) {
     console.error('❌ Error applying normalization:', error);
-    res.status(500).json({ error: 'Failed to apply changes' });
+    return res.status(500).json({ error: 'Failed to apply changes' });
   }
 });
 
 // Get normalization rules (placeholder for future functionality)
 router.get('/normalization-rules', async (req: Request, res: Response) => {
   // For now, return empty rules - could be stored in database later
-  res.json([]);
+  return res.json([]);
 });
 
 // Get admin statistics
@@ -215,7 +214,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       prisma.station.groupBy({ by: ['type'], _count: true, where: { type: { not: null } } })
     ]);
 
-    res.json({
+    return res.json({
       total: totalStations,
       withGenre: stationsWithGenre,
       withType: stationsWithType,
@@ -228,7 +227,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('❌ Error fetching admin stats:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    return res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
 
@@ -258,7 +257,7 @@ router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: R
     
     console.log(`🔧 Admin ${updatedStation.isActive ? 'enabled' : 'disabled'} station: ${station.name}`);
     
-    res.json({
+    return res.json({
       success: true,
       station: {
         id: updatedStation.id,
@@ -270,7 +269,7 @@ router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: R
     
   } catch (error) {
     console.error('❌ Error toggling station status:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to toggle station status' 
     });
@@ -291,7 +290,7 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
       }
     });
     
-    res.json({
+    return res.json({
       success: true,
       stationId,
       adminNotes: updatedStation.adminNotes
@@ -299,7 +298,7 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
     
   } catch (error) {
     console.error('❌ Error updating admin notes:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to update admin notes' 
     });
@@ -319,7 +318,7 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
       }
     });
     
-    res.json({
+    return res.json({
       success: true,
       stationId,
       userReports: updatedStation.userReports
@@ -327,7 +326,7 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
     
   } catch (error) {
     console.error('❌ Error resetting user reports:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to reset user reports' 
     });
@@ -357,7 +356,7 @@ router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Re
     
     console.log(`📢 User reported station not working: ${station.name} (${updatedStation.userReports} reports)`);
     
-    res.json({
+    return res.json({
       success: true,
       message: 'Report submitted successfully',
       stationId,
@@ -366,7 +365,7 @@ router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Re
     
   } catch (error) {
     console.error('❌ Error submitting user report:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to submit report' 
     });

@@ -34,14 +34,13 @@ const decodeHtmlEntities = (text: string): string => {
 };
 
 // Web scraping endpoint for business information
-router.post('/business', async (req: Request, res: Response): Promise<void> => {
+router.post('/business', async (req: Request, res: Response) => {
   const { url } = req.body;
   
   console.log(`🕷️ Scraping business info from: ${url}`);
   
   if (!url) {
-    res.status(400).json({ success: false, error: 'URL is required' });
-    return;
+    return res.status(400).json({ success: false, error: 'URL is required' });
   }
 
   try {
@@ -651,17 +650,16 @@ router.post('/business', async (req: Request, res: Response): Promise<void> => {
 
     if (!hasUsefulData && (finalUrl.includes('google.com/maps') || finalUrl.includes('maps.google.com'))) {
       console.log('⚠️ Google Maps scraping failed - likely due to JavaScript rendering');
-      res.json({
+      return res.json({
         success: false,
         error: 'Google Maps pages require JavaScript to load content. Try using the business\'s official website instead, or copy information manually.',
         suggestion: 'For Google Maps: 1) Right-click on the place → "What\'s here?" to get coordinates, 2) Check if the business has a website link, 3) Use the business name to search for their official website.'
       });
-      return;
     }
 
     console.log(`✅ Scraping successful from ${source}:`, businessInfo);
 
-    res.json({
+    return res.json({
       success: true,
       data: businessInfo,
       source: source
@@ -669,7 +667,7 @@ router.post('/business', async (req: Request, res: Response): Promise<void> => {
 
   } catch (error) {
     console.error('❌ Scraping failed:', error);
-    res.json({
+    return res.json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to scrape business information'
     });

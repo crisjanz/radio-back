@@ -30,14 +30,17 @@ router.get('/', async (req: Request, res: Response) => {
         limit,
         totalPages: Math.ceil(total / limit)
       });
+      return;
     } else {
       // Return all stations for backward compatibility
       const allStations = await prisma.station.findMany();
       res.json(allStations);
+      return;
     }
   } catch (error) {
     console.error('❌ Error fetching stations:', error);
     res.status(500).json({ error: 'Failed to fetch stations' });
+    return;
   }
 });
 

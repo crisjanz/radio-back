@@ -134,7 +134,7 @@ router.post('/check/:id', async (req: Request, res: Response) => {
     
     console.log(`${isWorking ? '✅' : '❌'} Stream ${isWorking ? 'working' : 'failed'}: ${station.name}`);
     
-    res.json({
+    return res.json({
       success: true,
       stationId,
       streamUrl: station.streamUrl,
@@ -145,7 +145,7 @@ router.post('/check/:id', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error checking station health:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Health check failed' 
     });
@@ -237,7 +237,7 @@ router.post('/check-batch', async (req: Request, res: Response) => {
     
     console.log(`🎉 Batch health check complete: ${checked} checked, ${working} working, ${failed} failed`);
     
-    res.json({
+    return res.json({
       success: true,
       summary: {
         totalChecked: checked,
@@ -250,7 +250,7 @@ router.post('/check-batch', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error in batch health check:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Batch health check failed' 
     });
@@ -286,7 +286,7 @@ router.get('/problematic', async (req: Request, res: Response) => {
       take: parseInt(limit.toString())
     });
     
-    res.json({
+    return res.json({
       success: true,
       count: problematicStations.length,
       stations: problematicStations.map(station => ({
@@ -306,7 +306,7 @@ router.get('/problematic', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error fetching problematic stations:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to fetch problematic stations' 
     });
@@ -385,7 +385,7 @@ router.post('/force-check', async (req: Request, res: Response) => {
     
     console.log(`🎉 Force health check complete: ${checked} checked, ${working} working, ${failed} failed`);
     
-    res.json({
+    return res.json({
       success: true,
       summary: {
         totalChecked: checked,
@@ -398,7 +398,7 @@ router.post('/force-check', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error in force health check:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Force health check failed' 
     });
@@ -442,7 +442,7 @@ router.get('/schedule', async (req: Request, res: Response) => {
       })
     ]);
     
-    res.json({
+    return res.json({
       success: true,
       schedule: {
         healthyStationsInterval: '7 days',
@@ -457,7 +457,7 @@ router.get('/schedule', async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('❌ Error fetching health schedule:', error);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to fetch schedule' 
     });
