@@ -25,8 +25,15 @@ app.use('/admin', adminRoutes);
 app.use('/scrape', scrapingRoutes);
 app.use('/health', healthRoutes);
 
-app.get('/ping', (req, res) => {
-  res.send('pong');
+app.get('/ping', async (req, res) => {
+  try {
+    // Replace this with a lightweight query
+    const count = await db.station.count(); // Prisma example
+    res.json({ ok: true, stations: count });
+  } catch (err) {
+    console.error('Ping DB failed:', err);
+    res.status(500).json({ ok: false, error: 'DB error' });
+  }
 });
 
 // Legacy route endpoints for backward compatibility
