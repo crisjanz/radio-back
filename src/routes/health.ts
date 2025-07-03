@@ -5,6 +5,43 @@ import fetch from 'node-fetch';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Base health endpoint
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const stationCount = await prisma.station.count();
+    const stationsWithUrls = await prisma.station.count({
+      where: {
+        streamUrl: {
+          not: null,
+          notIn: ['', ' ']
+        }
+      }
+    });
+    
+    return res.json({
+      success: true,
+      message: 'Health check service is running',
+      stats: {
+        totalStations: stationCount,
+        stationsWithUrls: stationsWithUrls,
+        coverage: stationCount > 0 ? Math.round((stationsWithUrls / stationCount) * 100) : 0
+      },
+      endpoints: {
+        '/health/problematic': 'Get stations with issues',
+        '/health/check-batch': 'Run batch health check',
+        '/health/force-check': 'Force check specific station',
+        '/health/schedule': 'Get health check schedule'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in health base endpoint:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Health service error' 
+    });
+  }
+});
+
 // Ping a single stream to check if it's working
 const pingStream = async (url: string): Promise<boolean> => {
   try {

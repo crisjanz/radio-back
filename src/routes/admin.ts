@@ -5,6 +5,51 @@ import { PrismaClient } from '@prisma/client';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Base admin endpoint
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const [totalStations, stationsNeedingNormalization, activeStations] = await Promise.all([
+      prisma.station.count(),
+      prisma.station.count({
+        where: {
+          OR: [
+            { genre: null },
+            { type: null },
+            { genre: '' },
+            { type: '' }
+          ]
+        }
+      }),
+      prisma.station.count({ where: { isActive: true } })
+    ]);
+    
+    return res.json({
+      success: true,
+      message: 'Admin service is running',
+      stats: {
+        totalStations,
+        activeStations,
+        stationsNeedingNormalization,
+        completeness: totalStations > 0 ? Math.round(((totalStations - stationsNeedingNormalization) / totalStations) * 100) : 0
+      },
+      endpoints: {
+        '/admin/stations/normalize': 'Get stations needing normalization',
+        '/admin/normalization-rules': 'Get normalization rules',
+        '/admin/stations/analyze': 'Analyze stations for normalization',
+        '/admin/stations/apply-normalization': 'Apply normalization changes',
+        '/admin/stations/:id/toggle': 'Toggle station active status',
+        '/admin/stats': 'Get admin statistics'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in admin base endpoint:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Admin service error' 
+    });
+  }
+});
+
 // Get stations for normalization
 router.get('/stations/normalize', async (req: Request, res: Response) => {
   try {

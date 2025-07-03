@@ -4,6 +4,32 @@ import fetch from 'node-fetch';
 
 const router = Router();
 
+// Base scraping endpoint
+router.get('/', async (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    message: 'Web scraping service is running',
+    description: 'Extract business information from websites and Google Maps URLs',
+    endpoints: {
+      '/scrape/business': 'POST - Scrape business information from a URL'
+    },
+    supportedSources: [
+      'Website content extraction',
+      'Google Maps business information',
+      'Social media links detection',
+      'Contact information extraction',
+      'Business hours and descriptions'
+    ],
+    usage: {
+      method: 'POST',
+      endpoint: '/scrape/business',
+      body: {
+        url: 'https://example.com or Google Maps URL'
+      }
+    }
+  });
+});
+
 // HTML entity decoder function
 const decodeHtmlEntities = (text: string): string => {
   if (!text) return text;

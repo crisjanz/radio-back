@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Station {
+  id              Int     @id @default(autoincrement())
+  name            String
+  country         String
+  genre           String?
+  type            String?
+  streamUrl       String
+  favicon         String?
+  logo            String?
+  homepage        String?
+  // Geographic coordinates
+  latitude        Float?
+  longitude       Float?
+  city            String?
+  state           String? // State/Province
+  // Custom metadata API settings
+  metadataApiUrl  String?
+  metadataApiType String? // 'laut.fm', 'radio.co', 'custom', 'icecast', etc.
+  metadataFormat  String? // 'json', 'xml', 'text'
+  metadataFields  String? // JSON string with field mappings
+  // Extended station information
+  description     String?
+  language        String?
+  frequency       String? // e.g. "101.5 FM", "AM 1010"
+  establishedYear Int?
+  owner           String? // Broadcasting company/owner
+  bitrate         Int?
+  codec           String?
+  // Social media links
+  facebookUrl     String?
+  twitterUrl      String?
+  instagramUrl    String?
+  youtubeUrl      String?
+  // Contact information
+  email           String?
+  phone           String?
+  address         String?
+  // Schedule and programming
+  schedule        String? // JSON string with program schedule
+  programs        String? // JSON string with show information
+  // Additional metadata
+  tags            String? // Comma-separated tags
+  timezone        String?
+  // Radio Browser metadata
+  clickcount      Int? // Popularity from Radio Browser
+  votes           Int? // User votes from Radio Browser
+  radioBrowserUuid String? // Radio Browser station UUID for sync
+  // Stream health tracking
+  isActive        Boolean @default(true) // Manual enable/disable
+  lastPingCheck   DateTime? // Last ping attempt  
+  lastPingSuccess Boolean? // Result of last ping
+  consecutiveFailures Int @default(0) // Count of failed pings
+  userReports     Int @default(0) // Count of user "not working" reports
+  adminNotes      String? // Admin comments about stream status
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+}
