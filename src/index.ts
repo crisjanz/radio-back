@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.js';
 import scrapingRoutes from './routes/scraping.js';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
+import favoritesRoutes from './routes/favorites.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -27,6 +28,7 @@ app.use('/admin', adminRoutes);
 app.use('/scrape', scrapingRoutes);
 app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
+app.use('/api/favorites', favoritesRoutes);
 
 app.get('/ping', async (req, res) => {
   try {
@@ -123,4 +125,6 @@ app.listen(PORT, HOST, () => {
   console.log("   • /admin - Admin and normalization endpoints");
   console.log("   • /scrape - Web scraping endpoints");
   console.log("   • /health - Stream health checking endpoints");
+  console.log("   • /auth - Authentication endpoints");
+  console.log("   • /api/favorites - User favorites endpoints");
 });

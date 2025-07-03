@@ -15,6 +15,22 @@ model User {
   resetTokenExpiry DateTime? // When reset token expires
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
+  
+  // Relations
+  favorites       UserFavorites[]
+}
+
+model UserFavorites {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  stationId  Int
+  createdAt  DateTime @default(now())
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Unique constraint to prevent duplicate favorites
+  @@unique([userId, stationId])
 }
 
 model Station {
