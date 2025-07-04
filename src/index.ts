@@ -42,6 +42,54 @@ app.get('/ping', async (req, res) => {
   }
 });
 
+// Favicon proxy endpoint for HTTPS compatibility
+app.get('/favicon/:stationId', async (req, res) => {
+  try {
+    const stationId = parseInt(req.params.stationId);
+    if (isNaN(stationId)) {
+      return res.status(400).json({ error: 'Invalid station ID' });
+    }
+
+    const station = await prisma.station.findUnique({
+      where: { id: stationId },
+      select: { favicon: true }
+    });
+
+    if (!station?.favicon) {
+      return res.status(404).json({ error: 'Station or favicon not found' });
+    }
+
+    // Fetch the favicon from the original URL
+    const response = await fetch(station.favicon, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; RadioApp/1.0)',
+      },
+      timeout: 10000,
+    });
+
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Favicon not available' });
+    }
+
+    // Set appropriate headers
+    const contentType = response.headers.get('Content-Type') || 'image/png';
+    res.set({
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+
+    // Stream the image data
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Favicon proxy error:', error);
+    res.status(500).json({ error: 'Error fetching favicon' });
+  }
+});
+
 // Legacy route endpoints for backward compatibility
 app.get('/stations/countries', async (req: Request, res: Response) => {
   try {
@@ -130,4 +178,5 @@ app.listen(PORT, HOST, () => {
   console.log("   • /auth - Authentication endpoints");
   console.log("   • /api/favorites - User favorites endpoints");
   console.log("   • /api/test - Test endpoints for development");
+  console.log("   • /favicon/:stationId - Favicon proxy for HTTPS compatibility");
 });
