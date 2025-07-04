@@ -22,8 +22,9 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(express.json());
 
-// Serve static images
+// Serve static images and files
 app.use('/station-images', express.static('public/station-images'));
+app.use('/public', express.static('public'));
 
 // Route handlers
 app.use('/stations', stationRoutes);
@@ -36,6 +37,11 @@ app.use('/auth', authRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/test', testRoutes);
 app.use('/images', imageRoutes);
+
+// Image Editor route
+app.get('/admin/images', (req: Request, res: Response) => {
+  res.sendFile('image-editor.html', { root: 'public' });
+});
 
 app.get('/ping', async (req, res) => {
   try {

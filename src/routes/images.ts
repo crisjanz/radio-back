@@ -42,12 +42,32 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Station not found' });
     }
 
-    const imageUrl = station.favicon || station.logo;
+    // For re-downloads, prefer external URLs over local paths
+    let imageUrl;
+    
+    // Try to find an external URL (not starting with /station-images)
+    if (station.favicon && !station.favicon.startsWith('/station-images/')) {
+      imageUrl = station.favicon;
+    } else if (station.logo && !station.logo.startsWith('/station-images/')) {
+      imageUrl = station.logo;
+    } else {
+      // If both are local paths or empty, use the favicon (might be local)
+      imageUrl = station.favicon || station.logo;
+    }
+    
     if (!imageUrl) {
       return res.status(400).json({ error: 'No favicon or logo URL found for station' });
     }
+    
+    // If we still have a local path and this is a force re-download, show helpful error
+    if (imageUrl.startsWith('/station-images/') && req.query.force === 'true') {
+      return res.status(400).json({ 
+        error: 'No original external URL available for re-download. The original URL was overwritten when the image was first downloaded.' 
+      });
+    }
 
-    console.log(`Downloading image for station ${stationId}: ${imageUrl}`);
+    const isForceRedownload = req.query.force === 'true';
+    console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${stationId}: ${imageUrl}`);
 
     // Download the image
     const response = await fetch(imageUrl, {
@@ -65,28 +85,67 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
     const buffer = await response.arrayBuffer();
     const imageBuffer = Buffer.from(buffer);
 
+    // Get size parameter (default to 512 for better quality)
+    const requestedSize = parseInt(req.query.size as string) || 512;
+    const maxSize = Math.min(requestedSize, 1024); // Cap at 1024px for performance
+    
+    // Check original image dimensions
+    const metadata = await sharp(imageBuffer).metadata();
+    console.log(`Original image: ${metadata.width}x${metadata.height}, requested: ${maxSize}x${maxSize}`);
+    
     // Process image with Sharp - convert to PNG and optimize
     const outputPath = getImagePath(stationId, 'png');
-    await sharp(imageBuffer)
-      .png({ quality: 90 })
-      .resize(256, 256, { 
-        fit: 'inside',
-        withoutEnlargement: false 
-      })
-      .toFile(outputPath);
+    
+    // Only resize if original is larger than requested, or if explicitly requested
+    const shouldResize = (metadata.width && metadata.width > maxSize) || 
+                        (metadata.height && metadata.height > maxSize) || 
+                        req.query.resize === 'true';
+    
+    if (shouldResize) {
+      await sharp(imageBuffer)
+        .png({ quality: 90 })
+        .resize(maxSize, maxSize, { 
+          fit: 'inside',
+          withoutEnlargement: false 
+        })
+        .toFile(outputPath);
+    } else {
+      // Keep original size, just convert to PNG
+      await sharp(imageBuffer)
+        .png({ quality: 90 })
+        .toFile(outputPath);
+    }
 
     // Update database with local image path
     const imageUrl_local = getImageUrl(stationId, 'png');
+    
+    // Preserve original URL in logo field if logo is empty and this is the original URL
+    const updateData: { favicon: string; logo?: string } = { favicon: imageUrl_local };
+    if (!station.logo && imageUrl !== imageUrl_local) {
+      updateData.logo = imageUrl; // Store original URL in logo field as backup
+    }
+    
     await prisma.station.update({
       where: { id: stationId },
-      data: { favicon: imageUrl_local }
+      data: updateData
     });
 
+    // Get final image metadata
+    const finalMetadata = await sharp(outputPath).metadata();
+    
     res.json({ 
       success: true, 
       imageUrl: imageUrl_local,
       originalUrl: imageUrl,
-      stationName: station.name
+      stationName: station.name,
+      dimensions: {
+        width: finalMetadata.width,
+        height: finalMetadata.height,
+        original: {
+          width: metadata.width,
+          height: metadata.height
+        }
+      }
     });
   } catch (error) {
     console.error('Download error:', error);
