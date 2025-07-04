@@ -52,15 +52,21 @@ app.get('/favicon/:stationId', async (req, res) => {
 
     const station = await prisma.station.findUnique({
       where: { id: stationId },
-      select: { favicon: true }
+      select: { favicon: true, logo: true }
     });
 
-    if (!station?.favicon) {
-      return res.status(404).json({ error: 'Station or favicon not found' });
+    if (!station) {
+      return res.status(404).json({ error: 'Station not found' });
     }
 
-    // Fetch the favicon from the original URL
-    const response = await fetch(station.favicon, {
+    // Use favicon first, fallback to logo
+    const imageUrl = station.favicon || station.logo;
+    if (!imageUrl) {
+      return res.status(404).json({ error: 'No favicon or logo found for station' });
+    }
+
+    // Fetch the image from the original URL
+    const response = await fetch(imageUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; RadioApp/1.0)',
       },
