@@ -13,6 +13,7 @@ import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import favoritesRoutes from './routes/favorites.js';
 import testRoutes from './routes/test.js';
+import imageRoutes from './routes/images.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -20,6 +21,9 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static images
+app.use('/station-images', express.static('public/station-images'));
 
 // Route handlers
 app.use('/stations', stationRoutes);
@@ -31,6 +35,7 @@ app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/test', testRoutes);
+app.use('/images', imageRoutes);
 
 app.get('/ping', async (req, res) => {
   try {
@@ -131,5 +136,6 @@ app.listen(PORT, HOST, () => {
   console.log("   • /auth - Authentication endpoints");
   console.log("   • /api/favorites - User favorites endpoints");
   console.log("   • /api/test - Test endpoints for development");
-  console.log("   • /favicon/:stationId - Favicon proxy for HTTPS compatibility");
+  console.log("   • /images - Image management and processing endpoints");
+  console.log("   • /station-images - Static image serving");
 });
