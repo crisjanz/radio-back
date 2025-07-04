@@ -65,11 +65,22 @@ app.get('/favicon/:stationId', async (req, res) => {
       return res.status(404).json({ error: 'No favicon or logo found for station' });
     }
 
+    console.log(`Fetching favicon for station ${stationId}: ${imageUrl}`);
+
     // Fetch the image from the original URL
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RadioApp/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
       },
+      redirect: 'follow', // Follow redirects
       timeout: 10000,
     });
 
