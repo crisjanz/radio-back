@@ -38,9 +38,21 @@ app.use('/api/favorites', favoritesRoutes);
 app.use('/api/test', testRoutes);
 app.use('/images', imageRoutes);
 
-// Image Editor route
+// Admin routes for static HTML pages
 app.get('/admin/images', (req: Request, res: Response) => {
   res.sendFile('image-editor.html', { root: 'public' });
+});
+
+app.get('/admin/stations', (req: Request, res: Response) => {
+  res.sendFile('admin-stations.html', { root: 'public' });
+});
+
+app.get('/admin/stations/edit', (req: Request, res: Response) => {
+  res.sendFile('admin-stations-edit.html', { root: 'public' });
+});
+
+app.get('/admin/simple-image-editor', (req: Request, res: Response) => {
+  res.sendFile('simple-image-editor.html', { root: 'public' });
 });
 
 app.get('/ping', async (req, res) => {

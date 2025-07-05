@@ -1,0 +1,1484 @@
+// Admin Station Editor JavaScript Functions
+// Extracted from admin-stations-edit.html for better maintainability
+
+let stations = [];
+let filteredStations = [];
+let currentPage = 1;
+const stationsPerPage = 50;
+let selectedStations = new Set();
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    loadStations();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Search input
+    document.getElementById('search-input').addEventListener('input', debounce(filterStations, 300));
+    
+    // Filter dropdowns
+    ['filter-country', 'filter-genre', 'filter-type', 'filter-image'].forEach(id => {
+        document.getElementById(id).addEventListener('change', filterStations);
+    });
+
+    // Select all checkboxes
+    document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+    document.getElementById('header-select-all').addEventListener('change', toggleSelectAll);
+}
+
+async function loadStations() {
+    try {
+        console.log('Loading stations...');
+        const response = await fetch('/stations');
+        console.log('Response status:', response.status);
+        if (response.ok) {
+            stations = await response.json();
+            console.log('Loaded stations:', stations.length);
+            filteredStations = [...stations];
+            await loadFilterOptions(); // Load filter options after stations are loaded
+            renderStations();
+            updateStationsCount();
+        } else {
+            throw new Error(`Failed to load stations: ${response.status} ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error loading stations:', error);
+        showError('Failed to load stations. Please try again.');
+    }
+}
+
+async function loadFilterOptions() {
+    try {
+        console.log('Loading filter options from', stations.length, 'stations');
+        
+        // Clear existing options (except "All" option)
+        const countrySelect = document.getElementById('filter-country');
+        const genreSelect = document.getElementById('filter-genre');
+        const typeSelect = document.getElementById('filter-type');
+        
+        // Clear all options except the first one (All)
+        countrySelect.innerHTML = '<option value="">All Countries</option>';
+        genreSelect.innerHTML = '<option value="">All Genres</option>';
+        typeSelect.innerHTML = '<option value="">All Types</option>';
+
+        // Load countries
+        const countries = [...new Set(stations.map(s => s.country))].filter(Boolean).sort();
+        console.log('Found countries:', countries.length);
+        countries.forEach(country => {
+            const option = document.createElement('option');
+            option.value = country;
+            option.textContent = country;
+            countrySelect.appendChild(option);
+        });
+
+        // Load genres
+        const genres = [...new Set(stations.map(s => s.genre))].filter(Boolean).sort();
+        console.log('Found genres:', genres.length);
+        genres.forEach(genre => {
+            const option = document.createElement('option');
+            option.value = genre;
+            option.textContent = genre;
+            genreSelect.appendChild(option);
+        });
+
+        // Load types
+        const types = [...new Set(stations.map(s => s.type))].filter(Boolean).sort();
+        console.log('Found types:', types.length);
+        types.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type;
+            typeSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading filter options:', error);
+    }
+}
+
+function filterStations() {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const countryFilter = document.getElementById('filter-country').value;
+    const genreFilter = document.getElementById('filter-genre').value;
+    const typeFilter = document.getElementById('filter-type').value;
+    const imageFilter = document.getElementById('filter-image').value;
+
+    filteredStations = stations.filter(station => {
+        const matchesSearch = !searchTerm || 
+            station.name.toLowerCase().includes(searchTerm) ||
+            station.country?.toLowerCase().includes(searchTerm) ||
+            station.genre?.toLowerCase().includes(searchTerm) ||
+            station.type?.toLowerCase().includes(searchTerm);
+
+        const matchesCountry = !countryFilter || station.country === countryFilter;
+        const matchesGenre = !genreFilter || station.genre === genreFilter;
+        const matchesType = !typeFilter || station.type === typeFilter;
+        
+        const hasImage = station.favicon || station.logo;
+        const matchesImage = !imageFilter || 
+            (imageFilter === 'with' && hasImage) ||
+            (imageFilter === 'without' && !hasImage);
+
+        return matchesSearch && matchesCountry && matchesGenre && matchesType && matchesImage;
+    });
+
+    currentPage = 1;
+    renderStations();
+    updateStationsCount();
+    updateActiveFilters();
+}
+
+function renderStations() {
+    const container = document.getElementById('stations-list');
+    const loading = document.getElementById('loading-state');
+    const empty = document.getElementById('empty-state');
+    const pagination = document.getElementById('pagination');
+
+    loading.style.display = 'none';
+
+    if (filteredStations.length === 0) {
+        container.innerHTML = '';
+        empty.classList.remove('hidden');
+        pagination.classList.add('hidden');
+        return;
+    }
+
+    empty.classList.add('hidden');
+
+    const startIndex = (currentPage - 1) * stationsPerPage;
+    const endIndex = Math.min(startIndex + stationsPerPage, filteredStations.length);
+    const pageStations = filteredStations.slice(startIndex, endIndex);
+
+    container.innerHTML = pageStations.map(station => createStationRow(station)).join('');
+
+    // Update pagination
+    updatePagination();
+    pagination.classList.remove('hidden');
+}
+
+function createStationRow(station) {
+    const hasImage = station.favicon || station.logo;
+    const imageUrl = getFaviconUrl(station);
+    const isSelected = selectedStations.has(station.id);
+
+    return `
+        <div class="station-row grid grid-cols-1 md:grid-cols-12 gap-4 px-6 py-4 items-center">
+            <!-- Mobile Layout -->
+            <div class="md:hidden space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                               onchange="toggleStationSelection(${station.id})"
+                               class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0">
+                            ${hasImage ? `<img src="${imageUrl}" alt="${station.name}" class="w-full h-full object-contain">` : 
+                              '<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fas fa-radio text-lg"></i></div>'}
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-gray-900">${station.name}</h3>
+                            <p class="text-sm text-gray-600">${station.country || 'Unknown'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="health-indicator health-gray" title="Health status unknown"></span>
+                        <button onclick="editStation(${station.id})" 
+                                class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+                            Edit
+                        </button>
+                    </div>
+                </div>
+                ${station.genre || station.type ? `
+                <div class="flex flex-wrap gap-1">
+                    ${station.genre ? `<span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">${station.genre}</span>` : ''}
+                    ${station.type ? `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${station.type}</span>` : ''}
+                </div>
+                ` : ''}
+            </div>
+
+            <!-- Desktop Layout -->
+            <div class="hidden md:contents">
+                <div class="col-span-1">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                           onchange="toggleStationSelection(${station.id})"
+                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                </div>
+                <div class="col-span-1">
+                    <div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                        ${hasImage ? `<img src="${imageUrl}" alt="${station.name}" class="w-full h-full object-contain">` : 
+                          '<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fas fa-radio"></i></div>'}
+                    </div>
+                </div>
+                <div class="col-span-3">
+                    <h3 class="font-medium text-gray-900 truncate">${station.name}</h3>
+                    <p class="text-sm text-gray-600 truncate">${station.bitrate ? `${station.bitrate} kbps` : 'Unknown bitrate'}</p>
+                </div>
+                <div class="col-span-2">
+                    <span class="text-gray-900">${station.country || 'Unknown'}</span>
+                    ${station.city ? `<p class="text-sm text-gray-600">${station.city}</p>` : ''}
+                </div>
+                <div class="col-span-2">
+                    <div class="space-y-1">
+                        ${station.genre ? `<span class="inline-block px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">${station.genre}</span>` : ''}
+                        ${station.type ? `<span class="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${station.type}</span>` : ''}
+                    </div>
+                </div>
+                <div class="col-span-1">
+                    <span class="health-indicator health-gray" title="Health status unknown"></span>
+                </div>
+                <div class="col-span-2">
+                    <div class="flex space-x-2">
+                        <button onclick="editStation(${station.id})" 
+                                class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                        <button onclick="testStream(${station.id})" 
+                                class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors"
+                                title="Test stream">
+                            <i class="fas fa-play"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getFaviconUrl(station) {
+    const imageUrl = station.favicon || station.logo;
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('/station-images/')) {
+        return imageUrl; // Already has the correct path for backend serving
+    }
+    return imageUrl;
+}
+
+function updatePagination() {
+    const totalPages = Math.ceil(filteredStations.length / stationsPerPage);
+    const startIndex = (currentPage - 1) * stationsPerPage;
+    const endIndex = Math.min(startIndex + stationsPerPage, filteredStations.length);
+
+    document.getElementById('page-start').textContent = startIndex + 1;
+    document.getElementById('page-end').textContent = endIndex;
+    document.getElementById('total-stations').textContent = filteredStations.length;
+    document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+
+    document.getElementById('prev-page').disabled = currentPage === 1;
+    document.getElementById('next-page').disabled = currentPage === totalPages;
+}
+
+function changePage(direction) {
+    const totalPages = Math.ceil(filteredStations.length / stationsPerPage);
+    currentPage = Math.max(1, Math.min(totalPages, currentPage + direction));
+    renderStations();
+}
+
+function updateStationsCount() {
+    document.getElementById('stations-count').textContent = filteredStations.length;
+}
+
+function updateActiveFilters() {
+    const container = document.getElementById('active-filters');
+    const filters = [];
+
+    const searchTerm = document.getElementById('search-input').value;
+    if (searchTerm) filters.push({ type: 'search', value: searchTerm, label: `Search: "${searchTerm}"` });
+
+    const countryFilter = document.getElementById('filter-country').value;
+    if (countryFilter) filters.push({ type: 'country', value: countryFilter, label: `Country: ${countryFilter}` });
+
+    const genreFilter = document.getElementById('filter-genre').value;
+    if (genreFilter) filters.push({ type: 'genre', value: genreFilter, label: `Genre: ${genreFilter}` });
+
+    const typeFilter = document.getElementById('filter-type').value;
+    if (typeFilter) filters.push({ type: 'type', value: typeFilter, label: `Type: ${typeFilter}` });
+
+    const imageFilter = document.getElementById('filter-image').value;
+    if (imageFilter) filters.push({ type: 'image', value: imageFilter, label: `Image: ${imageFilter === 'with' ? 'With Images' : 'Without Images'}` });
+
+    container.innerHTML = filters.map(filter => `
+        <span class="filter-badge inline-flex items-center px-3 py-1 rounded-full text-xs font-medium text-white">
+            ${filter.label}
+            <button onclick="removeFilter('${filter.type}')" class="ml-2 text-white hover:text-gray-200">
+                <i class="fas fa-times text-xs"></i>
+            </button>
+        </span>
+    `).join('');
+}
+
+function removeFilter(type) {
+    switch (type) {
+        case 'search':
+            document.getElementById('search-input').value = '';
+            break;
+        case 'country':
+            document.getElementById('filter-country').value = '';
+            break;
+        case 'genre':
+            document.getElementById('filter-genre').value = '';
+            break;
+        case 'type':
+            document.getElementById('filter-type').value = '';
+            break;
+        case 'image':
+            document.getElementById('filter-image').value = '';
+            break;
+    }
+    filterStations();
+}
+
+function clearAllFilters() {
+    document.getElementById('search-input').value = '';
+    document.getElementById('filter-country').value = '';
+    document.getElementById('filter-genre').value = '';
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-image').value = '';
+    filterStations();
+}
+
+function toggleStationSelection(stationId) {
+    if (selectedStations.has(stationId)) {
+        selectedStations.delete(stationId);
+    } else {
+        selectedStations.add(stationId);
+    }
+    updateSelectedCount();
+}
+
+function toggleSelectAll(event) {
+    const isChecked = event.target.checked;
+    const startIndex = (currentPage - 1) * stationsPerPage;
+    const endIndex = Math.min(startIndex + stationsPerPage, filteredStations.length);
+    const pageStations = filteredStations.slice(startIndex, endIndex);
+
+    // Sync both select all checkboxes
+    document.getElementById('select-all').checked = isChecked;
+    document.getElementById('header-select-all').checked = isChecked;
+
+    if (isChecked) {
+        pageStations.forEach(station => selectedStations.add(station.id));
+    } else {
+        pageStations.forEach(station => selectedStations.delete(station.id));
+    }
+
+    updateSelectedCount();
+    renderStations(); // Re-render to update checkboxes
+}
+
+function updateSelectedCount() {
+    document.getElementById('selected-count').textContent = selectedStations.size;
+    
+    // Update select all checkboxes based on current page
+    const startIndex = (currentPage - 1) * stationsPerPage;
+    const endIndex = Math.min(startIndex + stationsPerPage, filteredStations.length);
+    const pageStations = filteredStations.slice(startIndex, endIndex);
+    
+    // Check if all stations on current page are selected
+    const allPageSelected = pageStations.length > 0 && pageStations.every(station => selectedStations.has(station.id));
+    
+    // Sync both checkboxes
+    document.getElementById('select-all').checked = allPageSelected;
+    document.getElementById('header-select-all').checked = allPageSelected;
+}
+
+let currentEditingStation = null;
+let originalStationData = null;
+
+function editStation(stationId) {
+    console.log('Opening station editor for station:', stationId);
+    const station = stations.find(s => s.id === stationId);
+    if (!station) {
+        alert('Station not found');
+        return;
+    }
+    
+    currentEditingStation = station;
+    originalStationData = { ...station }; // Store original data for reset
+    populateStationEditor(station);
+    document.getElementById('station-editor-modal').classList.remove('hidden');
+}
+
+function populateStationEditor(station) {
+    // Update header
+    document.getElementById('editor-station-name').textContent = station.name || 'Unnamed Station';
+    document.getElementById('editor-station-id').textContent = station.id;
+
+    // Basic Info
+    document.getElementById('edit-name').value = station.name || '';
+    document.getElementById('edit-country').value = station.country || '';
+    document.getElementById('edit-city').value = station.city || '';
+    document.getElementById('edit-genre').value = station.genre || '';
+    document.getElementById('edit-type').value = station.type || '';
+    document.getElementById('edit-stream-url').value = station.streamUrl || '';
+    document.getElementById('edit-homepage').value = station.homepage || '';
+    document.getElementById('edit-language').value = station.language || '';
+    document.getElementById('edit-bitrate').value = station.bitrate || '';
+    document.getElementById('edit-codec').value = station.codec || '';
+
+    // Location & Tags
+    document.getElementById('edit-tags').value = station.tags || '';
+    document.getElementById('edit-latitude').value = station.latitude || '';
+    document.getElementById('edit-longitude').value = station.longitude || '';
+
+    // Advanced Fields
+    document.getElementById('edit-description').value = station.description || '';
+    document.getElementById('edit-facebook').value = station.facebookUrl || '';
+    document.getElementById('edit-twitter').value = station.twitterUrl || '';
+    document.getElementById('edit-instagram').value = station.instagramUrl || '';
+    document.getElementById('edit-youtube').value = station.youtubeUrl || '';
+    document.getElementById('edit-owner').value = station.owner || '';
+    document.getElementById('edit-established').value = station.establishedYear || '';
+    document.getElementById('edit-email').value = station.email || '';
+    document.getElementById('edit-phone').value = station.phone || '';
+    document.getElementById('edit-favicon').value = station.favicon || '';
+    document.getElementById('edit-logo').value = station.logo || '';
+    document.getElementById('edit-address').value = station.address || '';
+
+    // Clear scraper tools for new station
+    document.getElementById('scraper-url').value = '';
+    document.getElementById('normalization-suggestions').classList.add('hidden');
+
+    // Load current image
+    loadStationImage(station);
+
+    // Load stream health
+    loadStreamHealth(station);
+
+    // Check for normalization suggestions
+    checkNormalizationSuggestions(station);
+}
+
+function loadStationImage(station) {
+    const currentImage = document.getElementById('current-image');
+    const noImagePlaceholder = document.getElementById('no-image-placeholder');
+    
+    const imageUrl = getFaviconUrl(station);
+    if (imageUrl) {
+        currentImage.src = imageUrl;
+        currentImage.classList.remove('hidden');
+        noImagePlaceholder.classList.add('hidden');
+    } else {
+        currentImage.classList.add('hidden');
+        noImagePlaceholder.classList.remove('hidden');
+    }
+}
+
+function loadStreamHealth(station) {
+    const statusElement = document.getElementById('stream-status');
+    const lastCheckElement = document.getElementById('last-check');
+    
+    if (station.lastPingSuccess === true) {
+        statusElement.innerHTML = '<span class="health-indicator health-green mr-2"></span><span class="text-sm text-green-600">Healthy</span>';
+    } else if (station.lastPingSuccess === false) {
+        statusElement.innerHTML = '<span class="health-indicator health-red mr-2"></span><span class="text-sm text-red-600">Offline</span>';
+    } else {
+        statusElement.innerHTML = '<span class="health-indicator health-gray mr-2"></span><span class="text-sm text-gray-600">Unknown</span>';
+    }
+    
+    if (station.lastPingCheck) {
+        const lastCheck = new Date(station.lastPingCheck);
+        const now = new Date();
+        const diffHours = Math.floor((now - lastCheck) / (1000 * 60 * 60));
+        lastCheckElement.textContent = diffHours > 0 ? `${diffHours} hours ago` : 'Recently';
+    } else {
+        lastCheckElement.textContent = 'Never';
+    }
+}
+
+let currentNormalizationSuggestions = null;
+
+async function checkNormalizationSuggestions(station) {
+    const suggestionsContainer = document.getElementById('normalization-suggestions');
+    const genreSuggestion = document.getElementById('genre-suggestion');
+    const typeSuggestion = document.getElementById('type-suggestion');
+    
+    try {
+        // Call the normalizer API to get suggestions
+        const response = await fetch('/admin/normalize-preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                genre: station.genre,
+                type: station.type,
+                name: station.name
+            })
+        });
+        
+        if (response.ok) {
+            const suggestions = await response.json();
+            currentNormalizationSuggestions = suggestions;
+            
+            let hasSuggestions = false;
+            
+            // Show genre suggestion if different
+            if (suggestions.genre && suggestions.genre !== station.genre) {
+                genreSuggestion.innerHTML = `<span class="text-gray-600">Genre:</span> <span class="text-purple-600">${station.genre || 'empty'} → ${suggestions.genre}</span>`;
+                hasSuggestions = true;
+            } else {
+                genreSuggestion.innerHTML = '';
+            }
+            
+            // Show type suggestion if different
+            if (suggestions.type && suggestions.type !== station.type) {
+                typeSuggestion.innerHTML = `<span class="text-gray-600">Type:</span> <span class="text-purple-600">${station.type || 'empty'} → ${suggestions.type}</span>`;
+                hasSuggestions = true;
+            } else {
+                typeSuggestion.innerHTML = '';
+            }
+            
+            if (hasSuggestions) {
+                suggestionsContainer.classList.remove('hidden');
+            } else {
+                suggestionsContainer.classList.add('hidden');
+            }
+        } else {
+            console.error('Failed to get normalization suggestions');
+            suggestionsContainer.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error getting normalization suggestions:', error);
+        suggestionsContainer.classList.add('hidden');
+    }
+}
+
+async function saveStation() {
+    if (!currentEditingStation) return;
+    
+    try {
+        const formData = collectStationFormData();
+        console.log('Saving station:', formData);
+        
+        const response = await fetch(`/stations/${currentEditingStation.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            const updatedStation = await response.json();
+            
+            // Update the station in our local array
+            const index = stations.findIndex(s => s.id === currentEditingStation.id);
+            if (index !== -1) {
+                stations[index] = updatedStation;
+                filteredStations = [...stations]; // Refresh filtered list
+                renderStations(); // Re-render the station list
+            }
+            
+            alert('Station saved successfully!');
+            closeStationEditor();
+        } else {
+            throw new Error('Failed to save station');
+        }
+    } catch (error) {
+        console.error('Error saving station:', error);
+        alert('Failed to save station. Please try again.');
+    }
+}
+
+function collectStationFormData() {
+    return {
+        name: document.getElementById('edit-name').value,
+        country: document.getElementById('edit-country').value,
+        city: document.getElementById('edit-city').value,
+        genre: document.getElementById('edit-genre').value,
+        type: document.getElementById('edit-type').value,
+        streamUrl: document.getElementById('edit-stream-url').value,
+        homepage: document.getElementById('edit-homepage').value,
+        language: document.getElementById('edit-language').value,
+        bitrate: parseInt(document.getElementById('edit-bitrate').value) || null,
+        codec: document.getElementById('edit-codec').value,
+        tags: document.getElementById('edit-tags').value,
+        latitude: parseFloat(document.getElementById('edit-latitude').value) || null,
+        longitude: parseFloat(document.getElementById('edit-longitude').value) || null,
+        description: document.getElementById('edit-description').value,
+        facebookUrl: document.getElementById('edit-facebook').value,
+        twitterUrl: document.getElementById('edit-twitter').value,
+        instagramUrl: document.getElementById('edit-instagram').value,
+        youtubeUrl: document.getElementById('edit-youtube').value,
+        owner: document.getElementById('edit-owner').value,
+        establishedYear: parseInt(document.getElementById('edit-established').value) || null,
+        email: document.getElementById('edit-email').value,
+        phone: document.getElementById('edit-phone').value,
+        favicon: document.getElementById('edit-favicon').value,
+        logo: document.getElementById('edit-logo').value,
+        address: document.getElementById('edit-address').value
+    };
+}
+
+function resetStationForm() {
+    if (originalStationData) {
+        populateStationEditor(originalStationData);
+    }
+}
+
+function closeStationEditor() {
+    document.getElementById('station-editor-modal').classList.add('hidden');
+    currentEditingStation = null;
+    originalStationData = null;
+}
+
+// Image Editor Functions
+async function downloadStationImage(event) {
+    event.preventDefault(); // Prevent any default behavior
+
+    try {
+        const button = event.target.closest('button');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Downloading...';
+        button.disabled = true;
+
+        // Get input elements
+        const faviconInput = document.querySelector('#edit-favicon');
+        const logoInput = document.querySelector('#edit-logo');
+        const stationNameInput = document.querySelector('#edit-name');
+
+        // Log for debugging
+        console.log('Favicon Input:', faviconInput);
+        console.log('Logo Input:', logoInput);
+        console.log('Station Name Input:', stationNameInput);
+        console.log('Favicon URL Value:', faviconInput?.value);
+        console.log('Logo URL Value:', logoInput?.value);
+        console.log('Station Name Value:', stationNameInput?.value);
+        console.log('Station ID:', currentEditingStation?.id);
+
+        // Check if inputs exist
+        if (!faviconInput || !logoInput) {
+            console.error('Input elements for Favicon URL or Logo URL not found');
+            alert('Error: Favicon URL or Logo URL input fields are missing. Please check the form.');
+            button.innerHTML = originalText;
+            button.disabled = false;
+            return;
+        }
+
+        // Get input values
+        const faviconUrl = faviconInput.value?.trim() || '';
+        const logoUrl = logoInput.value?.trim() || '';
+        const imageUrl = logoUrl || faviconUrl;
+
+        if (!imageUrl) {
+            console.error('No valid URL found in Logo URL or Favicon URL fields');
+            alert('Please enter a valid URL in either the Logo URL or Favicon URL field.');
+            button.innerHTML = originalText;
+            button.disabled = false;
+            return;
+        }
+
+        // Validate URL format
+        try {
+            new URL(imageUrl);
+        } catch (e) {
+            console.error('Invalid URL format:', imageUrl);
+            alert('Invalid URL format. Please enter a valid URL.');
+            button.innerHTML = originalText;
+            button.disabled = false;
+            return;
+        }
+
+        // Get selected download size
+        const sizeSelect = document.getElementById('download-size');
+        const selectedSize = sizeSelect ? sizeSelect.value : '512';
+        const downloadSize = selectedSize === 'original' ? 2048 : parseInt(selectedSize);
+
+        console.log('Selected Size:', selectedSize, 'Download Size:', downloadSize);
+
+        // Determine endpoint and payload
+        const stationId = currentEditingStation?.id && typeof currentEditingStation.id === 'number' ? currentEditingStation.id : null;
+        let endpoint = '/images/download';
+        let payload = { url: imageUrl, size: downloadSize };
+
+        if (stationId) {
+            endpoint = `/images/download/${stationId}`;
+            payload = { url: imageUrl, size: downloadSize }; // Send URL for existing stations
+        }
+
+        // Fetch the image and save to server
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+
+            // Update the current image preview
+            const currentImage = document.getElementById('current-image');
+            const noImagePlaceholder = document.getElementById('no-image-placeholder');
+
+            if (currentImage && noImagePlaceholder) {
+                currentImage.src = result.imageUrl || imageUrl;
+                currentImage.classList.remove('hidden');
+                noImagePlaceholder.classList.add('hidden');
+            } else {
+                console.warn('Image preview elements not found');
+            }
+
+            // Store the image data for later use
+            if (currentEditingStation) {
+                currentEditingStation._downloadedImageData = result.imageData || result.imageUrl || imageUrl;
+                currentEditingStation._downloadedImageUrl = imageUrl;
+            }
+
+            // Create filename for alert
+            const stationName = stationNameInput?.value?.trim()?.replace(/\s+/g, '_') || `station${stationId ? `_${stationId}` : ''}`;
+            const originalInfo = result.dimensions?.original ? ` (original: ${result.dimensions.original.width}x${result.dimensions.original.height}px)` : '';
+            alert(`✅ Image saved to server for ${stationName} (${result.dimensions?.width || downloadSize}x${result.dimensions?.height || downloadSize}px)${originalInfo}`);
+        } else {
+            const error = await response.json();
+            console.error('Failed to save image:', error);
+            alert(`❌ Failed to save image to server: ${error.error}`);
+        }
+
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    } catch (error) {
+        console.error('Error saving image to server:', error);
+        alert('❌ Error saving image to server');
+
+        // Reset button
+        const button = event.target.closest('button');
+        button.innerHTML = '<i class="fas fa-download mr-1"></i>Download';
+        button.disabled = false;
+    }
+}
+
+// Ensure the script runs after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const downloadButton = document.querySelector('button[onclick="downloadStationImage(event)"]');
+    if (downloadButton) {
+        downloadButton.addEventListener('click', downloadStationImage);
+    }
+});
+
+function uploadStationImage() {
+    document.getElementById('image-upload-input').click();
+}
+
+function editStationImage() {
+    if (!currentEditingStation) return;
+    
+    // Create a message listener for when the image editor saves
+    const messageListener = (event) => {
+        if (event.data && event.data.type === 'imageUpdated' && event.data.stationId === currentEditingStation.id) {
+            // Reload the station image in the modal
+            setTimeout(async () => {
+                // Refresh station data from server to get updated image path
+                const response = await fetch(`/stations/${currentEditingStation.id}`);
+                if (response.ok) {
+                    const updatedStation = await response.json();
+                    currentEditingStation = updatedStation;
+                    loadStationImage(updatedStation);
+                    
+                    // Update the preview if the same image
+                    const previewImage = document.getElementById('preview-image');
+                    const currentImage = document.getElementById('current-image');
+                    if (!previewImage.classList.contains('hidden')) {
+                        previewImage.src = currentImage.src + '?t=' + Date.now(); // Cache bust
+                    }
+                }
+            }, 1000); // Small delay to ensure image is processed
+            
+            // Remove the listener
+            window.removeEventListener('message', messageListener);
+        }
+    };
+    
+    window.addEventListener('message', messageListener);
+    
+    // Open the simple image editor with pre-loaded station
+    const editorUrl = `/admin/simple-image-editor?stationId=${currentEditingStation.id}&stationName=${encodeURIComponent(currentEditingStation.name)}`;
+    window.open(editorUrl, '_blank', 'width=1000,height=700');
+}
+
+// Scraper Functions
+async function autoScrapeData() {
+    let primaryUrl = document.getElementById('scraper-url').value.trim();
+    let secondaryUrl = null;
+    
+    // Determine primary and secondary URLs
+    if (primaryUrl) {
+        // If URL is provided, check if we should also use homepage as secondary
+        if (currentEditingStation && currentEditingStation.homepage && 
+            currentEditingStation.homepage !== primaryUrl) {
+            secondaryUrl = currentEditingStation.homepage;
+        }
+    } else {
+        // If no URL provided, use homepage as primary
+        if (currentEditingStation && currentEditingStation.homepage) {
+            primaryUrl = currentEditingStation.homepage;
+            document.getElementById('scraper-url').value = primaryUrl;
+        }
+    }
+    
+    if (!primaryUrl) {
+        alert('Please enter a URL to scrape or ensure the station has a homepage URL');
+        return;
+    }
+    
+    // Validate URLs
+    try {
+        new URL(primaryUrl);
+        if (secondaryUrl) new URL(secondaryUrl);
+    } catch (e) {
+        alert('Please enter valid URLs (include http:// or https://)');
+        return;
+    }
+    
+    try {
+        console.log('Scraping primary URL:', primaryUrl);
+        if (secondaryUrl) console.log('Scraping secondary URL:', secondaryUrl);
+        
+        // Show loading state
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Scraping...';
+        button.disabled = true;
+        
+        // Scrape primary URL
+        const primaryResponse = await fetch('/admin/scrape-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url: primaryUrl })
+        });
+        
+        let primaryData = null;
+        if (primaryResponse.ok) {
+            primaryData = await primaryResponse.json();
+            console.log('Primary scrape result:', primaryData);
+        }
+        
+        // Scrape secondary URL if provided
+        let secondaryData = null;
+        if (secondaryUrl) {
+            const secondaryResponse = await fetch('/admin/scrape-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: secondaryUrl })
+            });
+            
+            if (secondaryResponse.ok) {
+                secondaryData = await secondaryResponse.json();
+                console.log('Secondary scrape result:', secondaryData);
+            }
+        }
+        
+        // Merge the data
+        const mergedData = mergeScrapedData(primaryData, secondaryData);
+        displayScrapedData(mergedData);
+        
+        // Restore button state
+        button.innerHTML = originalText;
+        button.disabled = false;
+    } catch (error) {
+        console.error('Error scraping data:', error);
+        alert(`Failed to scrape website: ${error.message}`);
+        
+        // Restore button state
+        const button = event.target;
+        button.innerHTML = '<i class="fas fa-search mr-2"></i>Auto-Scrape';
+        button.disabled = false;
+    }
+}
+
+let currentScrapedData = null;
+
+function mergeScrapedData(primaryResult, secondaryResult) {
+    // If only one result is successful, return it
+    if (!primaryResult || !primaryResult.success) {
+        return secondaryResult;
+    }
+    if (!secondaryResult || !secondaryResult.success) {
+        return primaryResult;
+    }
+    
+    // Both results are successful, check for conflicts
+    const primaryData = primaryResult.data || {};
+    const secondaryData = secondaryResult.data || {};
+    
+    // Find fields with conflicts (both sources have different data)
+    const conflicts = {};
+    const mergedData = {};
+    
+    const allFields = ['name', 'description', 'phone', 'email', 'website', 'address', 'favicon', 'logo'];
+    
+    for (const field of allFields) {
+        const primaryValue = primaryData[field];
+        const secondaryValue = secondaryData[field];
+        
+        if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
+            // Conflict found - both sources have different values
+            conflicts[field] = {
+                primary: { value: primaryValue, source: primaryResult.source },
+                secondary: { value: secondaryValue, source: secondaryResult.source }
+            };
+        } else {
+            // No conflict - use the available value
+            mergedData[field] = primaryValue || secondaryValue;
+        }
+    }
+    
+    // Handle coordinates separately
+    if (primaryData.coordinates && secondaryData.coordinates) {
+        if (primaryData.coordinates.latitude !== secondaryData.coordinates.latitude ||
+            primaryData.coordinates.longitude !== secondaryData.coordinates.longitude) {
+            conflicts.coordinates = {
+                primary: { value: primaryData.coordinates, source: primaryResult.source },
+                secondary: { value: secondaryData.coordinates, source: secondaryResult.source }
+            };
+        } else {
+            mergedData.coordinates = primaryData.coordinates;
+        }
+    } else {
+        mergedData.coordinates = primaryData.coordinates || secondaryData.coordinates;
+    }
+    
+    // Handle social media conflicts
+    if (primaryData.socialMedia || secondaryData.socialMedia) {
+        const primarySocial = primaryData.socialMedia || {};
+        const secondarySocial = secondaryData.socialMedia || {};
+        const socialConflicts = {};
+        const socialMerged = {};
+        
+        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
+        for (const field of socialFields) {
+            const primaryValue = primarySocial[field];
+            const secondaryValue = secondarySocial[field];
+            
+            if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
+                socialConflicts[field] = {
+                    primary: { value: primaryValue, source: primaryResult.source },
+                    secondary: { value: secondaryValue, source: secondaryResult.source }
+                };
+            } else {
+                socialMerged[field] = primaryValue || secondaryValue;
+            }
+        }
+        
+        if (Object.keys(socialConflicts).length > 0) {
+            conflicts.socialMedia = socialConflicts;
+        }
+        mergedData.socialMedia = socialMerged;
+    }
+    
+    // If there are conflicts, show conflict resolution UI
+    if (Object.keys(conflicts).length > 0) {
+        return {
+            success: true,
+            hasConflicts: true,
+            conflicts: conflicts,
+            mergedData: mergedData,
+            primaryResult: primaryResult,
+            secondaryResult: secondaryResult
+        };
+    }
+    
+    // No conflicts, return merged data
+    const sources = [];
+    if (primaryResult.source) sources.push(primaryResult.source);
+    if (secondaryResult.source) sources.push(secondaryResult.source);
+    
+    return {
+        success: true,
+        data: mergedData,
+        source: sources.join(' + '),
+        merged: true
+    };
+}
+
+function displayScrapedData(responseData) {
+    const preview = document.getElementById('scraped-data-preview');
+    const content = document.getElementById('scraped-content');
+    
+    // Check if there are conflicts that need resolution
+    if (responseData.hasConflicts) {
+        displayConflictResolution(responseData);
+        return;
+    }
+    
+    // Extract data from the response structure
+    const data = responseData.data || responseData;
+    currentScrapedData = data;
+    
+    let html = '<div class="mb-4"><div class="text-sm text-gray-600 mb-3">Select which data you want to apply:</div></div>';
+    
+    // Basic fields with checkboxes
+    const basicFields = [
+        { key: 'name', label: 'Name' },
+        { key: 'description', label: 'Description' },
+        { key: 'website', label: 'Website' },
+        { key: 'email', label: 'Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'address', label: 'Address' }
+    ];
+    
+    basicFields.forEach(field => {
+        if (data[field.key]) {
+            html += `
+                <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <label class="flex items-start">
+                        <input type="checkbox" id="apply_${field.key}" checked class="mr-3 mt-1">
+                        <div>
+                            <div class="font-semibold text-sm">${field.label}:</div>
+                            <div class="text-sm text-gray-700">${data[field.key]}</div>
+                        </div>
+                    </label>
+                </div>
+            `;
+        }
+    });
+    
+    // Coordinates
+    if (data.coordinates) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_coordinates" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Coordinates:</div>
+                        <div class="text-sm text-gray-700">${data.coordinates.latitude}, ${data.coordinates.longitude}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    // Social Media
+    if (data.socialMedia && Object.keys(data.socialMedia).length > 0) {
+        html += '<div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">';
+        html += '<div class="font-semibold text-sm mb-2">Social Media:</div>';
+        Object.entries(data.socialMedia).forEach(([platform, url]) => {
+            html += `
+                <label class="flex items-start mb-2">
+                    <input type="checkbox" id="apply_social_${platform}" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-medium text-sm">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
+                        <div class="text-sm text-gray-700">${url}</div>
+                    </div>
+                </label>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    // Images
+    if (data.favicon) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_favicon" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Favicon:</div>
+                        <div class="text-sm text-gray-700">${data.favicon}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    if (data.logo) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_logo" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Logo:</div>
+                        <div class="text-sm text-gray-700">${data.logo}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    if (responseData.source) {
+        const sourceClass = responseData.merged ? 'text-blue-600 font-semibold' : 'text-gray-600';
+        const mergedIcon = responseData.merged ? '<i class="fas fa-layer-group mr-1"></i>' : '';
+        html = `<div class="mb-2"><strong>Source:</strong> <span class="${sourceClass}">${mergedIcon}${responseData.source}</span></div>` + html;
+    }
+    
+    content.innerHTML = html || 'No useful data found on this page';
+    preview.classList.remove('hidden');
+}
+
+let currentConflictData = null;
+
+function getSourceDisplayName(source, isPrimary) {
+    if (source === 'Google Maps') return 'Google Maps';
+    if (source === 'Website') return isPrimary ? 'Entered URL' : 'Homepage';
+    return source;
+}
+
+function displayConflictResolution(conflictData) {
+    currentConflictData = conflictData;
+    const preview = document.getElementById('scraped-data-preview');
+    const content = document.getElementById('scraped-content');
+    
+    let html = `
+        <div class="mb-4">
+            <div class="text-orange-600 font-semibold mb-2">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                Data Conflicts Found - Choose Which Values to Use:
+            </div>
+            <div class="text-sm text-gray-600 mb-3">
+                Both sources have different values for some fields. Select which ones you want to use:
+            </div>
+        </div>
+    `;
+    
+    // Display conflicts for each field
+    Object.entries(conflictData.conflicts).forEach(([field, conflict]) => {
+        if (field === 'socialMedia') {
+            // Handle social media conflicts
+            html += `<div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">`;
+            html += `<div class="font-semibold mb-2">Social Media:</div>`;
+            
+            Object.entries(conflict).forEach(([platform, platformConflict]) => {
+                const primarySourceName = getSourceDisplayName(platformConflict.primary.source, true);
+                const secondarySourceName = getSourceDisplayName(platformConflict.secondary.source, false);
+                
+                html += `
+                    <div class="mb-2 ml-4">
+                        <div class="font-medium text-sm mb-1">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
+                        <label class="flex items-center mb-1">
+                            <input type="checkbox" id="conflict_social_${platform}_primary" class="mr-2">
+                            <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                            <span class="ml-2 text-sm">${platformConflict.primary.value}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="conflict_social_${platform}_secondary" class="mr-2">
+                            <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                            <span class="ml-2 text-sm">${platformConflict.secondary.value}</span>
+                        </label>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        } else if (field === 'coordinates') {
+            // Handle coordinates conflict
+            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
+            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
+            
+            html += `
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div class="font-semibold mb-2">Coordinates:</div>
+                    <label class="flex items-center mb-2">
+                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
+                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.primary.value.latitude}, ${conflict.primary.value.longitude}</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
+                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.secondary.value.latitude}, ${conflict.secondary.value.longitude}</span>
+                    </label>
+                </div>
+            `;
+        } else {
+            // Handle regular field conflicts
+            const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
+            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
+            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
+            
+            html += `
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div class="font-semibold mb-2">${fieldName}:</div>
+                    <label class="flex items-center mb-2">
+                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
+                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.primary.value}</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
+                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.secondary.value}</span>
+                    </label>
+                </div>
+            `;
+        }
+    });
+    
+    html += `
+        <div class="mt-4 flex space-x-2">
+            <button onclick="resolveConflicts()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-check mr-2"></i>Apply Selected Values
+            </button>
+            <button onclick="cancelConflictResolution()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                <i class="fas fa-times mr-2"></i>Cancel
+            </button>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+    preview.classList.remove('hidden');
+}
+
+function resolveConflicts() {
+    if (!currentConflictData) return;
+    
+    const resolvedData = { ...currentConflictData.mergedData };
+    
+    // Resolve each conflict based on user selection
+    Object.entries(currentConflictData.conflicts).forEach(([field, conflict]) => {
+        if (field === 'socialMedia') {
+            resolvedData.socialMedia = resolvedData.socialMedia || {};
+            Object.keys(conflict).forEach(platform => {
+                const selected = document.querySelector(`input[name="conflict_social_${platform}"]:checked`)?.value;
+                if (selected) {
+                    resolvedData.socialMedia[platform] = conflict[platform][selected].value;
+                }
+            });
+        } else {
+            const selected = document.querySelector(`input[name="conflict_${field}"]:checked`)?.value;
+            if (selected) {
+                resolvedData[field] = conflict[selected].value;
+            }
+        }
+    });
+    
+    // Create final result object
+    const sources = [];
+    if (currentConflictData.primaryResult.source) sources.push(currentConflictData.primaryResult.source);
+    if (currentConflictData.secondaryResult.source) sources.push(currentConflictData.secondaryResult.source);
+    
+    const finalResult = {
+        success: true,
+        data: resolvedData,
+        source: sources.join(' + '),
+        merged: true,
+        resolved: true
+    };
+    
+    // Display the resolved data
+    displayScrapedData(finalResult);
+    currentConflictData = null;
+}
+
+function cancelConflictResolution() {
+    document.getElementById('scraped-data-preview').classList.add('hidden');
+    currentConflictData = null;
+}
+
+function applyScrapedData() {
+    if (!currentScrapedData) return;
+    
+    let appliedCount = 0;
+    
+    // Apply basic fields based on checkbox selection
+    const basicFields = ['name', 'description', 'website', 'email', 'phone', 'address'];
+    basicFields.forEach(field => {
+        const checkbox = document.getElementById(`apply_${field}`);
+        if (checkbox && checkbox.checked && currentScrapedData[field]) {
+            const targetField = field === 'website' ? 'edit-homepage' : `edit-${field}`;
+            const targetElement = document.getElementById(targetField);
+            if (targetElement) {
+                targetElement.value = currentScrapedData[field];
+                appliedCount++;
+            }
+        }
+    });
+    
+    // Apply coordinates
+    const coordCheckbox = document.getElementById('apply_coordinates');
+    if (coordCheckbox && coordCheckbox.checked && currentScrapedData.coordinates) {
+        const latElement = document.getElementById('edit-latitude');
+        const lngElement = document.getElementById('edit-longitude');
+        if (latElement && lngElement) {
+            latElement.value = currentScrapedData.coordinates.latitude;
+            lngElement.value = currentScrapedData.coordinates.longitude;
+            appliedCount++;
+        }
+    }
+    
+    // Apply social media
+    if (currentScrapedData.socialMedia) {
+        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
+        socialFields.forEach(platform => {
+            const checkbox = document.getElementById(`apply_social_${platform}`);
+            if (checkbox && checkbox.checked && currentScrapedData.socialMedia[platform]) {
+                const targetElement = document.getElementById(`edit-${platform}`);
+                if (targetElement) {
+                    targetElement.value = currentScrapedData.socialMedia[platform];
+                    appliedCount++;
+                }
+            }
+        });
+    }
+    
+    // Apply favicon/logo
+    const faviconCheckbox = document.getElementById('apply_favicon');
+    if (faviconCheckbox && faviconCheckbox.checked && currentScrapedData.favicon) {
+        const faviconElement = document.getElementById('edit-favicon');
+        if (faviconElement) {
+            faviconElement.value = currentScrapedData.favicon;
+            appliedCount++;
+        }
+    }
+    
+    const logoCheckbox = document.getElementById('apply_logo');
+    if (logoCheckbox && logoCheckbox.checked && currentScrapedData.logo) {
+        const logoElement = document.getElementById('edit-logo');
+        if (logoElement) {
+            logoElement.value = currentScrapedData.logo;
+            appliedCount++;
+        }
+    }
+    
+    alert(`✅ Applied ${appliedCount} selected fields to the station!`);
+}
+
+function useHomepageUrl() {
+    if (currentEditingStation && currentEditingStation.homepage) {
+        document.getElementById('scraper-url').value = currentEditingStation.homepage;
+    } else {
+        alert('No homepage URL available for this station');
+    }
+}
+
+function testScrapingUrl() {
+    const url = document.getElementById('scraper-url').value;
+    if (url) {
+        window.open(url, '_blank');
+    }
+}
+
+// Stream Health Functions
+async function testStreamHealth() {
+    if (!currentEditingStation) return;
+    
+    try {
+        console.log('Testing stream health for:', currentEditingStation.streamUrl);
+        const response = await fetch('/health/check-stream', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                streamUrl: currentEditingStation.streamUrl,
+                stationId: currentEditingStation.id 
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            updateStreamHealthDisplay(result);
+        } else {
+            throw new Error('Failed to test stream');
+        }
+    } catch (error) {
+        console.error('Error testing stream:', error);
+        alert('Failed to test stream. Please try again.');
+    }
+}
+
+function updateStreamHealthDisplay(result) {
+    const statusElement = document.getElementById('stream-status');
+    const lastCheckElement = document.getElementById('last-check');
+    
+    if (result.healthy) {
+        statusElement.innerHTML = `<span class="health-indicator health-green mr-2"></span><span class="text-sm text-green-600">Healthy (${result.bitrate || 'Unknown'} kbps)</span>`;
+    } else {
+        statusElement.innerHTML = '<span class="health-indicator health-red mr-2"></span><span class="text-sm text-red-600">Offline</span>';
+    }
+    
+    lastCheckElement.textContent = 'Just now';
+}
+
+// Normalization Functions
+function applyNormalizationSuggestions() {
+    if (!currentNormalizationSuggestions) {
+        alert('No normalization suggestions available');
+        return;
+    }
+    
+    // Apply the suggestions to the form fields
+    if (currentNormalizationSuggestions.genre) {
+        document.getElementById('edit-genre').value = currentNormalizationSuggestions.genre;
+    }
+    if (currentNormalizationSuggestions.type) {
+        document.getElementById('edit-type').value = currentNormalizationSuggestions.type;
+    }
+    
+    // Hide the suggestions since they've been applied
+    document.getElementById('normalization-suggestions').classList.add('hidden');
+    
+    alert('Normalization suggestions have been applied!');
+}
+
+// Location Functions
+function autoLocate() {
+    const country = document.getElementById('edit-country').value;
+    const city = document.getElementById('edit-city').value;
+    
+    if (!country && !city) {
+        alert('Please enter a country or city to auto-locate');
+        return;
+    }
+    
+    console.log('Auto-locating:', { country, city });
+    // This would use a geocoding service to find coordinates
+    alert('Auto-locate functionality - to be implemented');
+}
+
+// File upload handler
+document.getElementById('image-upload-input').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        console.log('Image uploaded:', file.name);
+        // Handle image upload
+        alert('Image upload functionality - to be implemented');
+    }
+});
+
+function testStream(stationId) {
+    const station = stations.find(s => s.id === stationId);
+    if (station && station.streamUrl) {
+        window.open(station.streamUrl, '_blank');
+    } else {
+        alert('No stream URL available for this station');
+    }
+}
+
+function bulkHealthCheck() {
+    if (selectedStations.size === 0) {
+        alert('Please select stations to check');
+        return;
+    }
+    console.log('Checking health for stations:', Array.from(selectedStations));
+    // TODO: Implement bulk health check
+}
+
+function bulkNormalize() {
+    if (selectedStations.size === 0) {
+        alert('Please select stations to normalize');
+        return;
+    }
+    console.log('Normalizing stations:', Array.from(selectedStations));
+    // TODO: Implement bulk normalization
+}
+
+function showError(message) {
+    // Simple error display - could be enhanced with a toast system
+    alert(message);
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}

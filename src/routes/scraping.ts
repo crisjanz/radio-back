@@ -147,13 +147,18 @@ router.post('/business', async (req: Request, res: Response) => {
       coordinates: null
     };
 
-    // Extract business name (improved patterns for modern Google Maps)
+    // Extract business name (improved patterns for radio stations and businesses)
     const namePatterns = [
       // Google Maps URL patterns - extract from URL path
       /\/place\/([^\/\?%]+)/,
       /\/maps\/place\/([^\/\?%]+)/,
       // Title patterns - but not generic "Google Maps"
       /<title[^>]*>([^<]+?)\s*[-|–]\s*Google\s*Maps/i,
+      // Title patterns for radio stations and general websites
+      /<title[^>]*>([^<]{3,}?)(?:\s*[-|–]\s*(?:Home|Listen|Live|Radio|FM|AM|Online|Stream|Broadcasting|Music|News).*?)?<\/title>/i,
+      /<title[^>]*>([^<]{3,}?)\s*[-|–].*?(?:FM|AM|Radio|Station|Broadcasting)/i,
+      /<title[^>]*>([^<]{3,}?)\s*[-|–].*?<\/title>/i,
+      /<title[^>]*>([^<]{3,}?)<\/title>/i,
       // JSON data patterns for Google Maps
       /\["([^"]{3,})",null,\[\[null,null,[0-9.-]+,[0-9.-]+\]/,
       /"([^"]{3,})".*?(?:place_id|place-id)/i,
@@ -161,9 +166,19 @@ router.post('/business', async (req: Request, res: Response) => {
       // Structured data patterns
       /"name":"([^"]{3,})"/,
       /property="og:title"[^>]*content="([^"]{3,})"/,
-      // Header patterns
-      /<h1[^>]*[^>]*>([^<]{3,})</,
+      /property="og:site_name"[^>]*content="([^"]{3,})"/,
+      // Header patterns (improved for radio stations)
+      /<h1[^>]*class="[^"]*(?:logo|brand|station|title)[^"]*"[^>]*>([^<]{3,})<\/h1>/i,
+      /<h1[^>]*>([^<]{3,}?(?:FM|AM|Radio|Station|Broadcasting)[^<]*)<\/h1>/i,
+      /<h1[^>]*>([^<]{3,})<\/h1>/i,
+      // Logo and brand images alt text
+      /<img[^>]*(?:class="[^"]*(?:logo|brand)[^"]*"|alt="[^"]*(?:logo|brand)[^"]*")[^>]*alt="([^"]{3,})"/i,
+      /<img[^>]*alt="([^"]{3,})"[^>]*(?:class="[^"]*(?:logo|brand)[^"]*"|src="[^"]*(?:logo|brand)[^"]*")/i,
+      // Radio-specific patterns
+      /(?:listen(?:\s+live)?(?:\s+to)?|now\s+playing(?:\s+on)?)[:\s]*([^<\n\r]{3,}?(?:FM|AM|Radio)[^<\n\r]*)/i,
+      /(\w+(?:\s+\w+)*\s+(?:FM|AM|Radio|Station|Broadcasting))/i,
       // Data attributes
+      /data-(?:name|title|station)="([^"]{3,})"/,
       /data-value="([^"]{3,})"/,
       /aria-label="([^"]{3,})"/
     ];
@@ -173,8 +188,17 @@ router.post('/business', async (req: Request, res: Response) => {
       if (match && match[1] && !businessInfo.name) {
         let name = decodeHtmlEntities(match[1].trim().replace(/\+/g, ' '));
         
-        // Skip generic names
-        if (name.toLowerCase() === 'google maps' || name.toLowerCase() === 'maps' || name.length < 3) {
+        // Skip generic names but be more permissive for radio stations
+        const lowerName = name.toLowerCase();
+        if (lowerName === 'google maps' || 
+            lowerName === 'maps' || 
+            lowerName === 'home' ||
+            lowerName === 'live' ||
+            lowerName === 'listen' ||
+            lowerName === 'online' ||
+            lowerName === 'streaming' ||
+            name.length < 2 ||
+            /^[^a-zA-Z0-9]*$/.test(name)) { // Only punctuation/symbols
           continue;
         }
         
@@ -672,15 +696,24 @@ router.post('/business', async (req: Request, res: Response) => {
     // Check if we got useful data
     const hasUsefulData = businessInfo.name || businessInfo.description || businessInfo.phone || 
                          businessInfo.email || businessInfo.address || businessInfo.coordinates ||
-                         Object.keys(businessInfo.socialMedia).length > 0;
+                         Object.keys(businessInfo.socialMedia).length > 0 || businessInfo.favicon || businessInfo.logo;
 
-    if (!hasUsefulData && (finalUrl.includes('google.com/maps') || finalUrl.includes('maps.google.com'))) {
-      console.log('⚠️ Google Maps scraping failed - likely due to JavaScript rendering');
-      return res.json({
-        success: false,
-        error: 'Google Maps pages require JavaScript to load content. Try using the business\'s official website instead, or copy information manually.',
-        suggestion: 'For Google Maps: 1) Right-click on the place → "What\'s here?" to get coordinates, 2) Check if the business has a website link, 3) Use the business name to search for their official website.'
-      });
+    if (!hasUsefulData) {
+      if (finalUrl.includes('google.com/maps') || finalUrl.includes('maps.google.com')) {
+        console.log('⚠️ Google Maps scraping failed - likely due to JavaScript rendering');
+        return res.json({
+          success: false,
+          error: 'Google Maps pages require JavaScript to load content. Try using the business\'s official website instead, or copy information manually.',
+          suggestion: 'For Google Maps: 1) Right-click on the place → "What\'s here?" to get coordinates, 2) Check if the business has a website link, 3) Use the business name to search for their official website.'
+        });
+      } else {
+        console.log('⚠️ Website scraping found no useful business information');
+        return res.json({
+          success: false,
+          error: 'No useful business information found on this page. The page may not contain structured data or may require JavaScript to load content.',
+          suggestion: 'Try: 1) A different page on the same website (like an "About" or "Contact" page), 2) The business\'s Google Maps listing, 3) Copy information manually from the website.'
+        });
+      }
     }
 
     console.log(`✅ Scraping successful from ${source}:`, businessInfo);

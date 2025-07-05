@@ -9,7 +9,7 @@ import fetch from 'node-fetch';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Configure mul for file uploads
+// Configure multer for file uploads
 const upload = multer({ 
   dest: 'uploads/',
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
@@ -98,8 +98,6 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid station ID' });
     }
 
-    const { url, size = 512 } = req.body; // Accept URL from request body
-
     const station = await prisma.station.findUnique({
       where: { id: stationId },
       select: { id: true, name: true, favicon: true, logo: true }
@@ -109,20 +107,28 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Station not found' });
     }
 
-    // Use provided URL or fall back to database URLs
-    let imageUrl = url;
-    if (!imageUrl) {
-      if (station.favicon && !station.favicon.startsWith('/station-images/')) {
-        imageUrl = station.favicon;
-      } else if (station.logo && !station.logo.startsWith('/station-images/')) {
-        imageUrl = station.logo;
-      } else {
-        imageUrl = station.favicon || station.logo;
-      }
+    // For re-downloads, prefer external URLs over local paths
+    let imageUrl;
+    
+    // Try to find an external URL (not starting with /station-images)
+    if (station.favicon && !station.favicon.startsWith('/station-images/')) {
+      imageUrl = station.favicon;
+    } else if (station.logo && !station.logo.startsWith('/station-images/')) {
+      imageUrl = station.logo;
+    } else {
+      // If both are local paths or empty, use the favicon (might be local)
+      imageUrl = station.favicon || station.logo;
     }
-
+    
     if (!imageUrl) {
       return res.status(400).json({ error: 'No favicon or logo URL found for station' });
+    }
+    
+    // If we still have a local path and this is a force re-download, show helpful error
+    if (imageUrl.startsWith('/station-images/') && req.query.force === 'true') {
+      return res.status(400).json({ 
+        error: 'No original external URL available for re-download. The original URL was overwritten when the image was first downloaded.' 
+      });
     }
 
     const isForceRedownload = req.query.force === 'true';
@@ -144,8 +150,9 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
     const buffer = await response.arrayBuffer();
     const imageBuffer = Buffer.from(buffer);
 
-    // Get size parameter
-    const maxSize = Math.min(parseInt(size), 1024); // Cap at 1024px
+    // Get size parameter (default to 512 for better quality)
+    const requestedSize = parseInt(req.query.size as string) || 512;
+    const maxSize = Math.min(requestedSize, 1024); // Cap at 1024px for performance
     
     // Check original image dimensions
     const metadata = await sharp(imageBuffer).metadata();

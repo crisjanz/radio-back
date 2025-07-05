@@ -81,6 +81,40 @@ router.get('/search', async (req: Request, res: Response) => {
   }
 });
 
+// Get database statistics
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const [total, withImages, recentImports] = await Promise.all([
+      prisma.station.count(),
+      prisma.station.count({
+        where: {
+          OR: [
+            { favicon: { not: null } },
+            { logo: { not: null } }
+          ]
+        }
+      }),
+      prisma.station.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+          }
+        }
+      })
+    ]);
+
+    res.json({
+      total,
+      active: total, // For now, assume all are active
+      withImages,
+      recentImports
+    });
+  } catch (error) {
+    console.error('Error getting database stats:', error);
+    res.status(500).json({ error: 'Failed to get database stats' });
+  }
+});
+
 // Get countries with station counts
 router.get('/countries', async (req: Request, res: Response) => {
   try {
@@ -133,6 +167,35 @@ router.get('/genres', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('❌ Error fetching genres:', error);
     res.status(500).json({ error: 'Failed to fetch genres' });
+  }
+});
+
+// Update station by ID
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid station ID' });
+      return;
+    }
+
+    const updateData = req.body;
+    
+    // Remove undefined and empty string values
+    const cleanedData = Object.fromEntries(
+      Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
+    );
+
+    const updatedStation = await prisma.station.update({
+      where: { id },
+      data: cleanedData
+    });
+
+    res.json(updatedStation);
+  } catch (error) {
+    console.error('❌ Error updating station:', error);
+    res.status(500).json({ error: 'Failed to update station' });
   }
 });
 

@@ -1,6 +1,7 @@
 // admin.ts
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import fetch from 'node-fetch';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -414,6 +415,107 @@ router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Re
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to submit report' 
     });
+  }
+});
+
+// Scraper endpoint for unified editor
+router.post('/scrape-url', async (req: Request, res: Response) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    // Use the existing scraping endpoint
+    const response = await fetch('http://localhost:3001/scrape/business', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url })
+    });
+
+    if (response.ok) {
+      const scrapedData = await response.json();
+      res.json(scrapedData);
+    } else {
+      throw new Error('Failed to scrape website');
+    }
+  } catch (error) {
+    console.error('❌ Error scraping URL:', error);
+    res.status(500).json({ error: 'Failed to scrape website' });
+  }
+});
+
+// Normalization preview endpoint
+router.post('/normalize-preview', async (req: Request, res: Response) => {
+  try {
+    const { genre, type, name } = req.body;
+    
+    // Genre normalization rules
+    const genreRules = [
+      { keywords: ['rock'], normalized: 'rock' },
+      { keywords: ['country'], normalized: 'country' },
+      { keywords: ['pop'], normalized: 'pop' },
+      { keywords: ['jazz'], normalized: 'jazz' },
+      { keywords: ['blues'], normalized: 'blues' },
+      { keywords: ['classical'], normalized: 'classical' },
+      { keywords: ['electronic', 'dance', 'edm'], normalized: 'electronic' },
+      { keywords: ['hip', 'rap'], normalized: 'hip-hop' },
+      { keywords: ['folk'], normalized: 'folk' },
+      { keywords: ['christian', 'religious', 'gospel'], normalized: 'christian' },
+      { keywords: ['oldies', 'classic hits', '60s', '70s', '80s', '90s'], normalized: 'oldies' },
+      { keywords: ['alternative', 'indie'], normalized: 'alternative' }
+    ];
+
+    // Type normalization rules
+    const typeRules = [
+      { keywords: ['news'], normalized: 'news' },
+      { keywords: ['talk'], normalized: 'talk' },
+      { keywords: ['sport', 'espn'], normalized: 'sport' }
+    ];
+    
+    let suggestedGenre = null;
+    let suggestedType = null;
+    
+    // Check genre normalization
+    if (genre) {
+      const genreText = genre.toLowerCase();
+      for (const rule of genreRules) {
+        if (rule.keywords.some(keyword => genreText.includes(keyword)) && genreText !== rule.normalized) {
+          suggestedGenre = rule.normalized;
+          break;
+        }
+      }
+    }
+    
+    // Check type normalization
+    if (type) {
+      const typeText = type.toLowerCase();
+      for (const rule of typeRules) {
+        if (rule.keywords.some(keyword => typeText.includes(keyword)) && typeText !== rule.normalized) {
+          suggestedType = rule.normalized;
+          break;
+        }
+      }
+      
+      // Default to music if no specific type matches
+      if (!suggestedType && !typeRules.some(rule => rule.keywords.some(keyword => typeText.includes(keyword))) && typeText !== 'music') {
+        suggestedType = 'music';
+      }
+    } else {
+      // If no type, suggest 'music' as default
+      suggestedType = 'music';
+    }
+    
+    res.json({
+      genre: suggestedGenre,
+      type: suggestedType
+    });
+  } catch (error) {
+    console.error('❌ Error getting normalization preview:', error);
+    res.status(500).json({ error: 'Failed to get normalization suggestions' });
   }
 });
 

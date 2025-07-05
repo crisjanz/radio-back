@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station Manager - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .feature-icon {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">Station Manager</h1>
+                    <span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">Admin</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/admin/images" class="text-gray-600 hover:text-gray-900 text-sm">Image Editor</a>
+                    <a href="/admin/scraper" class="text-gray-600 hover:text-gray-900 text-sm">Scraper</a>
+                    <a href="/admin/normalizer" class="text-gray-600 hover:text-gray-900 text-sm">Normalizer</a>
+                    <a href="/admin/import" class="text-gray-600 hover:text-gray-900 text-sm">Import Wizard</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Hero Section -->
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-gray-900 mb-4">Welcome to Station Manager</h2>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                Manage your radio stations efficiently with our unified tools. Import new stations or edit existing ones with advanced scraping, normalization, and image editing capabilities.
+            </p>
+        </div>
+
+        <!-- Main Action Cards -->
+        <div class="grid md:grid-cols-2 gap-8 mb-12">
+            <!-- Edit Existing Stations Card -->
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 card-hover">
+                <div class="p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="feature-icon w-12 h-12 rounded-xl flex items-center justify-center text-white mr-4">
+                            <i class="fas fa-edit text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">Edit Existing Stations</h3>
+                            <p class="text-gray-600 text-sm">Manage and update your current station database</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-search w-4 text-center mr-3 text-blue-500"></i>
+                            <span>Search and filter existing stations</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-globe w-4 text-center mr-3 text-blue-500"></i>
+                            <span>Auto-scrape updated station information</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-image w-4 text-center mr-3 text-blue-500"></i>
+                            <span>Update logos and branding</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-signal w-4 text-center mr-3 text-blue-500"></i>
+                            <span>Check stream health status</span>
+                        </div>
+                    </div>
+                    
+                    <button onclick="openEditExisting()" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200">
+                        <i class="fas fa-edit mr-2"></i>
+                        Edit Existing Stations
+                    </button>
+                </div>
+            </div>
+
+            <!-- Import New Stations Card -->
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 card-hover">
+                <div class="p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="feature-icon w-12 h-12 rounded-xl flex items-center justify-center text-white mr-4">
+                            <i class="fas fa-download text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">Import New Stations</h3>
+                            <p class="text-gray-600 text-sm">Discover and add stations from RadioBrowser</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-filter w-4 text-center mr-3 text-green-500"></i>
+                            <span>Advanced filtering by country, genre, bitrate</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-magic w-4 text-center mr-3 text-green-500"></i>
+                            <span>Bulk import with auto-processing</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-tools w-4 text-center mr-3 text-green-500"></i>
+                            <span>Individual station editing before import</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check-circle w-4 text-center mr-3 text-green-500"></i>
+                            <span>Quality validation and normalization</span>
+                        </div>
+                    </div>
+                    
+                    <button onclick="openImportWizard()" 
+                            class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200">
+                        <i class="fas fa-download mr-2"></i>
+                        Import New Stations
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Database Overview</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-blue-600" id="total-stations">-</div>
+                    <div class="text-sm text-gray-600">Total Stations</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-green-600" id="active-stations">-</div>
+                    <div class="text-sm text-gray-600">Active Streams</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-purple-600" id="with-images">-</div>
+                    <div class="text-sm text-gray-600">With Images</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-orange-600" id="recent-imports">-</div>
+                    <div class="text-sm text-gray-600">Recent Imports</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="checkAllStreams()" 
+                        class="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-heart-pulse mr-2 text-red-500"></i>
+                    <span>Check All Streams</span>
+                </button>
+                <button onclick="normalizeAllData()" 
+                        class="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-wand-magic-sparkles mr-2 text-purple-500"></i>
+                    <span>Normalize All Data</span>
+                </button>
+                <button onclick="downloadMissingImages()" 
+                        class="flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-image mr-2 text-blue-500"></i>
+                    <span>Download Missing Images</span>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-sm mx-4">
+            <div class="flex items-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                <span class="text-gray-700">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load database stats on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDatabaseStats();
+        });
+
+        async function loadDatabaseStats() {
+            try {
+                const response = await fetch('/stations/stats');
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('total-stations').textContent = stats.total || 0;
+                    document.getElementById('active-stations').textContent = stats.active || 0;
+                    document.getElementById('with-images').textContent = stats.withImages || 0;
+                    document.getElementById('recent-imports').textContent = stats.recentImports || 0;
+                } else {
+                    console.error('Failed to load stats:', response.status, response.statusText);
+                }
+            } catch (error) {
+                console.error('Failed to load database stats:', error);
+            }
+        }
+
+        function openEditExisting() {
+            window.location.href = '/admin/stations/edit';
+        }
+
+        function openImportWizard() {
+            window.location.href = '/admin/stations/import';
+        }
+
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        async function checkAllStreams() {
+            if (!confirm('This will check all stream URLs for availability. This may take several minutes. Continue?')) {
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/admin/health-check/all', { method: 'POST' });
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Stream health check completed. ${result.healthy} healthy, ${result.unhealthy} unhealthy streams found.`);
+                } else {
+                    alert('Failed to check streams. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error checking streams:', error);
+                alert('Error checking streams. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function normalizeAllData() {
+            if (!confirm('This will normalize genres and types for all stations. Continue?')) {
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/admin/normalize/all', { method: 'POST' });
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Data normalization completed. ${result.updated} stations updated.`);
+                } else {
+                    alert('Failed to normalize data. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error normalizing data:', error);
+                alert('Error normalizing data. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function downloadMissingImages() {
+            if (!confirm('This will attempt to download images for stations without favicons. Continue?')) {
+                return;
+            }
+            
+            showLoading();
+            try {
+                const response = await fetch('/admin/images/download-missing', { method: 'POST' });
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Image download completed. ${result.downloaded} images downloaded, ${result.failed} failed.`);
+                } else {
+                    alert('Failed to download images. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error downloading images:', error);
+                alert('Error downloading images. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+    </script>
+</body>
+</html>

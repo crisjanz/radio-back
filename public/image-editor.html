@@ -159,6 +159,40 @@
         let imageInfo = null;
         let originalImageData = null; // Store original image for reset
 
+        // Initialize page with URL parameters
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const stationId = urlParams.get('stationId');
+            const stationName = urlParams.get('stationName');
+            const autoLoad = urlParams.get('autoLoad');
+            
+            if (stationId && autoLoad === 'true') {
+                // Auto-load the specified station
+                loadStationById(stationId, stationName);
+            }
+        });
+
+        // Load station by ID for direct access
+        async function loadStationById(stationId, stationName) {
+            try {
+                const response = await fetch(`/stations/${stationId}`);
+                if (response.ok) {
+                    const station = await response.json();
+                    await selectStation(station);
+                    
+                    // Hide search section and show selected station
+                    document.getElementById('searchInput').value = stationName || station.name;
+                    
+                    // Scroll to editor section
+                    document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    console.error('Failed to load station:', stationId);
+                }
+            } catch (error) {
+                console.error('Error loading station by ID:', error);
+            }
+        }
+
         // Navigation
         function goBackToAdmin() {
             window.location.href = '/admin';
@@ -459,6 +493,15 @@
                     const refreshResponse = await fetch(`/images/info/${selectedStation.id}`);
                     imageInfo = await refreshResponse.json();
                     displayStationInfo();
+                    
+                    // Notify parent window (unified editor) that image was updated
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'imageUpdated',
+                            stationId: selectedStation.id,
+                            stationName: selectedStation.name
+                        }, '*');
+                    }
                 } else {
                     const error = await uploadResponse.json();
                     alert(`❌ Failed to save: ${error.error}`);
