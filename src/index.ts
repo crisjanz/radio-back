@@ -47,9 +47,11 @@ app.get('/admin/stations', (req: Request, res: Response) => {
   res.sendFile('admin-stations.html', { root: 'public' });
 });
 
+
 app.get('/admin/stations/edit', (req: Request, res: Response) => {
   res.sendFile('admin-stations-edit.html', { root: 'public' });
 });
+
 
 app.get('/admin/simple-image-editor', (req: Request, res: Response) => {
   res.sendFile('simple-image-editor.html', { root: 'public' });
@@ -132,6 +134,13 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
+  // Don't exit for EPIPE errors from child processes
+  if (error.code === 'EPIPE') {
+    console.log('🔧 EPIPE error caught and handled - continuing server operation');
+    return;
+  }
+  // For other critical errors, still exit
+  console.error('💥 Critical error - shutting down server');
   process.exit(1);
 });
 
@@ -146,14 +155,12 @@ app.listen(PORT, HOST, () => {
   }
   console.log("🔗 Available routes:");
   console.log("   • /stations - Station CRUD operations");
-  console.log("   • /metadata - Stream metadata endpoints");
+  console.log("   • /metadata - Icecast metadata detection");
   console.log("   • /import - Radio Browser import endpoints");
   console.log("   • /admin - Admin and normalization endpoints");
-  console.log("   • /scrape - Web scraping endpoints");
   console.log("   • /health - Stream health checking endpoints");
   console.log("   • /auth - Authentication endpoints");
   console.log("   • /api/favorites - User favorites endpoints");
-  console.log("   • /api/test - Test endpoints for development");
   console.log("   • /images - Image management and processing endpoints");
   console.log("   • /station-images - Static image serving");
 });

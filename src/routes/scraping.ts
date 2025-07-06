@@ -275,7 +275,7 @@ router.post('/business', async (req: Request, res: Response) => {
           // Count actual digits first
           const digitCount = (phone.match(/\d/g) || []).length;
           
-          // Filter out invalid/weird phone numbers
+          // Filter out invalid/weird phone numbers and CSS classes
           if (phone.includes('999999') || 
               phone.includes('000000') || 
               phone.match(/^\.[\d.]+$/) ||
@@ -286,7 +286,10 @@ router.post('/business', async (req: Request, res: Response) => {
               phone.match(/^\d{1,3}$/) ||  // Too short
               phone.match(/^[.\-\s\(\)\/]+$/) ||  // Only punctuation
               phone.includes('111111') ||
-              phone.includes('123456')) {
+              phone.includes('123456') ||
+              phone.startsWith('-') ||  // Starts with dash (likely CSS class)
+              phone.startsWith('.') ||  // Starts with dot (likely CSS class)
+              phone.match(/^\d{10,}$/) && phone.length > 15) { // Very long number string (likely not phone)
             continue;
           }
           
@@ -326,11 +329,36 @@ router.post('/business', async (req: Request, res: Response) => {
       console.log(`📞 Found phone: ${businessInfo.phone} (score: ${scoredPhones[0].score})`);
     }
 
-    // Extract email addresses
+    // Extract email addresses (improved filtering)
     const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
-    const emailMatch = html.match(emailPattern);
-    if (emailMatch && emailMatch[0] && !emailMatch[0].includes('noreply') && !emailMatch[0].includes('example')) {
-      businessInfo.email = emailMatch[0];
+    const emailMatches = [...html.matchAll(emailPattern)];
+    
+    for (const match of emailMatches) {
+      if (match && match[1]) {
+        const email = match[1].toLowerCase();
+        
+        // Skip common non-business emails and image file references
+        if (email.includes('noreply') || 
+            email.includes('example') || 
+            email.includes('test') ||
+            email.includes('no-reply') ||
+            email.includes('donotreply') ||
+            email.includes('@2x.png') ||
+            email.includes('.png') ||
+            email.includes('.jpg') ||
+            email.includes('.jpeg') ||
+            email.includes('.gif') ||
+            email.includes('.svg') ||
+            email.includes('.webp') ||
+            email.includes('.ico') ||
+            email.includes('_') && email.includes('@') && email.includes('.png')) {
+          continue;
+        }
+        
+        businessInfo.email = match[1]; // Use original case
+        console.log(`📧 Found email: ${businessInfo.email}`);
+        break;
+      }
     }
 
     // Extract address (Enhanced Google Maps patterns)
@@ -412,6 +440,12 @@ router.post('/business', async (req: Request, res: Response) => {
               address.includes('!==') ||          // JavaScript operators
               address.includes('||') ||           // JavaScript operators
               address.includes('&&') ||           // JavaScript operators
+              address.includes('navbar') ||       // CSS class names
+              address.includes('sticky-top') ||   // CSS class names
+              address.includes('navbar-expand') || // CSS class names
+              address.includes('class=') ||       // HTML attributes
+              address.includes('id=') ||          // HTML attributes
+              address.includes('data-') ||        // HTML attributes
               address.match(/[{}();]/)) {         // JavaScript syntax characters
             continue;
           }
