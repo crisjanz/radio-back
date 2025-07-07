@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Monitor - Streemr Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .memory-bar {
+            transition: all 0.3s ease;
+        }
+        .pulse-green { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .pulse-yellow { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .pulse-red { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Memory Monitor</h1>
+            <div class="flex items-center gap-4">
+                <p class="text-gray-600">Real-time server memory usage monitoring</p>
+                <button id="refreshBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    Refresh Now
+                </button>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="autoRefresh" checked class="rounded">
+                    <label for="autoRefresh" class="text-sm text-gray-600">Auto-refresh (10s)</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Card -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Memory Usage Card -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-gray-900">Memory Usage</h2>
+                    <div id="statusBadge" class="px-3 py-1 rounded-full text-sm font-medium">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Memory Bar -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-medium text-gray-700">Heap Used</span>
+                        <span id="memoryText" class="text-sm text-gray-500">Loading...</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div id="memoryBar" class="memory-bar h-4 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Memory Stats -->
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <div class="text-gray-500">Heap Used</div>
+                        <div id="heapUsed" class="font-semibold">-</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500">Heap Total</div>
+                        <div id="heapTotal" class="font-semibold">-</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500">External</div>
+                        <div id="external" class="font-semibold">-</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500">RSS</div>
+                        <div id="rss" class="font-semibold">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Server Info Card -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Server Info</h2>
+                
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Uptime</span>
+                        <span id="uptime" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Node Version</span>
+                        <span id="nodeVersion" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Platform</span>
+                        <span id="platform" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Last Updated</span>
+                        <span id="lastUpdated" class="font-semibold">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Thresholds Info -->
+        <div class="bg-white rounded-xl shadow-lg p-6 border">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Memory Thresholds</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-4 h-4 bg-green-500 rounded-full"></div>
+                    <div class="text-sm">
+                        <div class="font-medium">Healthy</div>
+                        <div class="text-gray-500">< 250 MB</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-4 h-4 bg-yellow-500 rounded-full"></div>
+                    <div class="text-sm">
+                        <div class="font-medium">Elevated</div>
+                        <div class="text-gray-500">250-350 MB</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-4 h-4 bg-orange-500 rounded-full"></div>
+                    <div class="text-sm">
+                        <div class="font-medium">Warning</div>
+                        <div class="text-gray-500">350-400 MB</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-4 h-4 bg-red-500 rounded-full"></div>
+                    <div class="text-sm">
+                        <div class="font-medium">Critical</div>
+                        <div class="text-gray-500">> 400 MB</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back to Admin -->
+        <div class="mt-8 text-center">
+            <a href="/admin/stations" class="inline-flex items-center px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                ← Back to Admin Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        
+        async function fetchMemoryStats() {
+            try {
+                const response = await fetch('/memory');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateUI(data);
+                } else {
+                    console.error('Failed to fetch memory stats:', data.error);
+                    showError('Failed to fetch memory stats');
+                }
+            } catch (error) {
+                console.error('Error fetching memory stats:', error);
+                showError('Connection error');
+            }
+        }
+        
+        function updateUI(data) {
+            const { memory, server } = data;
+            
+            // Update status badge
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.textContent = memory.status.toUpperCase();
+            statusBadge.className = `px-3 py-1 rounded-full text-sm font-medium ${getStatusClasses(memory.statusColor)}`;
+            
+            // Update memory bar
+            const memoryBar = document.getElementById('memoryBar');
+            const memoryText = document.getElementById('memoryText');
+            
+            memoryBar.style.width = `${memory.usagePercentage}%`;
+            memoryBar.className = `memory-bar h-4 rounded-full ${getBarColor(memory.statusColor)}`;
+            memoryText.textContent = `${memory.heapUsed} MB / ${memory.totalMemoryMB} MB (${memory.usagePercentage}%)`;
+            
+            // Update memory stats
+            document.getElementById('heapUsed').textContent = `${memory.heapUsed} MB`;
+            document.getElementById('heapTotal').textContent = `${memory.heapTotal} MB`;
+            document.getElementById('external').textContent = `${memory.external} MB`;
+            document.getElementById('rss').textContent = `${memory.rss} MB`;
+            
+            // Update server info
+            document.getElementById('uptime').textContent = server.uptimeFormatted;
+            document.getElementById('nodeVersion').textContent = server.nodeVersion;
+            document.getElementById('platform').textContent = server.platform;
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+        }
+        
+        function getStatusClasses(color) {
+            switch (color) {
+                case 'green': return 'bg-green-100 text-green-800';
+                case 'yellow': return 'bg-yellow-100 text-yellow-800';
+                case 'orange': return 'bg-orange-100 text-orange-800';
+                case 'red': return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+        
+        function getBarColor(color) {
+            switch (color) {
+                case 'green': return 'bg-green-500';
+                case 'yellow': return 'bg-yellow-500';
+                case 'orange': return 'bg-orange-500';
+                case 'red': return 'bg-red-500 pulse-red';
+                default: return 'bg-gray-500';
+            }
+        }
+        
+        function showError(message) {
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.textContent = 'ERROR';
+            statusBadge.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800';
+            
+            document.getElementById('memoryText').textContent = message;
+        }
+        
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            if (checkbox.checked && !autoRefreshInterval) {
+                autoRefreshInterval = setInterval(fetchMemoryStats, 10000); // 10 seconds
+            } else if (!checkbox.checked && autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', fetchMemoryStats);
+        document.getElementById('autoRefresh').addEventListener('change', setupAutoRefresh);
+        
+        // Initial load
+        fetchMemoryStats();
+        setupAutoRefresh();
+    </script>
+</body>
+</html>

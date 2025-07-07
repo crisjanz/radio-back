@@ -9,22 +9,32 @@ export interface IcecastMetadata {
   error?: string;
 }
 
-// Request deduplication - track in-progress requests
+// Request deduplication - track in-progress requests AND cache results
 const activeRequests = new Map<string, Promise<IcecastMetadata>>();
-const REQUEST_CACHE_DURATION = 45000; // 45 seconds - shorter than typical song length
+const metadataCache = new Map<string, { data: IcecastMetadata; timestamp: number }>();
+const REQUEST_CACHE_DURATION = 45000; // 45 seconds for active requests
+const METADATA_CACHE_DURATION = 30000; // 30 seconds for cached results - more real-time updates
 
 // Export cleanup function for emergency memory management
 export function clearActiveRequests() {
-  console.log(`🧹 Clearing ${activeRequests.size} active metadata requests`);
+  console.log(`🧹 Clearing ${activeRequests.size} active requests and ${metadataCache.size} cached entries`);
   activeRequests.clear();
+  metadataCache.clear();
 }
 
 // Test if a stream supports Icecast/Shoutcast metadata
 export async function testIcecastMetadata(streamUrl: string): Promise<IcecastMetadata> {
+  // Check if we have cached metadata first
+  const cached = metadataCache.get(streamUrl);
+  if (cached && (Date.now() - cached.timestamp) < METADATA_CACHE_DURATION) {
+    console.log('💾 Using cached metadata for:', streamUrl.slice(-20));
+    return cached.data;
+  }
+  
   // Check if we already have an active request for this stream
   const existingRequest = activeRequests.get(streamUrl);
   if (existingRequest) {
-    console.log('🔄 Reusing active metadata request for:', streamUrl);
+    console.log('🔄 Reusing active metadata request for:', streamUrl.slice(-20));
     return existingRequest;
   }
   
@@ -32,8 +42,25 @@ export async function testIcecastMetadata(streamUrl: string): Promise<IcecastMet
   const requestPromise = performMetadataRequest(streamUrl);
   activeRequests.set(streamUrl, requestPromise);
   
-  // Clean up tracking after completion
-  requestPromise.finally(() => {
+  // Clean up tracking and cache result after completion
+  requestPromise.then((result) => {
+    // Cache the result for 90 seconds
+    metadataCache.set(streamUrl, {
+      data: result,
+      timestamp: Date.now()
+    });
+    
+    // Clean up old cache entries
+    if (metadataCache.size > 100) {
+      const entries = Array.from(metadataCache.entries());
+      const oldEntries = entries.filter(([, data]) => 
+        (Date.now() - data.timestamp) > METADATA_CACHE_DURATION
+      );
+      oldEntries.forEach(([key]) => metadataCache.delete(key));
+    }
+    
+    return result;
+  }).finally(() => {
     setTimeout(() => {
       activeRequests.delete(streamUrl);
     }, REQUEST_CACHE_DURATION);

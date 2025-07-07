@@ -15,6 +15,7 @@ import favoritesRoutes from './routes/favorites.js';
 import testRoutes from './routes/test.js';
 import imageRoutes from './routes/images.js';
 import imageProxyRoutes from './routes/image-proxy.js';
+import memoryRoutes from './routes/memory.js';
 import { memoryMonitor } from './middleware/memoryMonitor.js';
 
 const app = express();
@@ -41,24 +42,19 @@ app.use('/api/favorites', favoritesRoutes);
 app.use('/api/test', testRoutes);
 app.use('/images', imageRoutes);
 app.use('/image-proxy', imageProxyRoutes);
+app.use('/memory', memoryRoutes);
 
 // Admin routes for static HTML pages
-app.get('/admin/images', (req: Request, res: Response) => {
-  res.sendFile('image-editor.html', { root: 'public' });
-});
-
 app.get('/admin/stations', (req: Request, res: Response) => {
   res.sendFile('admin-stations.html', { root: 'public' });
 });
-
 
 app.get('/admin/stations/edit', (req: Request, res: Response) => {
   res.sendFile('admin-stations-edit.html', { root: 'public' });
 });
 
-
-app.get('/admin/simple-image-editor', (req: Request, res: Response) => {
-  res.sendFile('simple-image-editor.html', { root: 'public' });
+app.get('/admin/memory', (req: Request, res: Response) => {
+  res.sendFile('admin-memory.html', { root: 'public' });
 });
 
 app.get('/ping', async (req, res) => {
@@ -173,10 +169,11 @@ app.listen(PORT, HOST, () => {
   console.log("   • /stations - Station CRUD operations");
   console.log("   • /metadata - Icecast metadata detection");
   console.log("   • /import - Radio Browser import endpoints");
-  console.log("   • /admin - Admin and normalization endpoints");
+  console.log("   • /admin - Admin dashboard and management");
   console.log("   • /health - Stream health checking endpoints");
   console.log("   • /auth - Authentication endpoints");
   console.log("   • /api/favorites - User favorites endpoints");
   console.log("   • /images - Image management and processing endpoints");
+  console.log("   • /memory - Memory monitoring endpoints");
   console.log("   • /station-images - Static image serving");
 });
