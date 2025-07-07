@@ -30,8 +30,8 @@ function renderStations() {
 }
 
 function createStationRow(station) {
-    const hasImage = station.favicon || station.logo;
-    const imageUrl = getFaviconUrl(station);
+    const hasImage = station.favicon || station.logo || station.local_image_url;
+    const imageUrl = getFaviconUrl(station, { cacheBust: true });
     const isSelected = selectedStations.has(station.id);
 
     return `
@@ -116,14 +116,6 @@ function createStationRow(station) {
     `;
 }
 
-function getFaviconUrl(station) {
-    const imageUrl = station.favicon || station.logo;
-    if (!imageUrl) return null;
-    if (imageUrl.startsWith('/station-images/')) {
-        return imageUrl; // Already has the correct path for backend serving
-    }
-    return imageUrl;
-}
 
 function updatePagination() {
     const totalPages = Math.ceil(filteredStations.length / stationsPerPage);

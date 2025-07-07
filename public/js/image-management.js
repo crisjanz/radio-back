@@ -229,8 +229,8 @@ function loadStationImage(station) {
         return;
     }
 
-    // Use priority logic: local_image_url -> logo -> favicon
-    const imageUrl = getFaviconUrl(station);
+    // Use priority logic with cache busting for updated images
+    const imageUrl = getFaviconUrl(station, { cacheBust: true });
     
     console.log('Loading station image with priority:', {
         local: station.local_image_url,
@@ -240,17 +240,13 @@ function loadStationImage(station) {
     });
     
     if (imageUrl) {
-        // Add cache busting for Supabase URLs to ensure we get the latest image
-        const cacheBustUrl = imageUrl.includes('supabase.co') ? 
-            `${imageUrl}?t=${Date.now()}` : imageUrl;
-            
-        currentImage.src = cacheBustUrl;
+        currentImage.src = imageUrl;
         currentImage.classList.remove('hidden');
         noImagePlaceholder.classList.add('hidden');
         
         // Handle image load errors
         currentImage.onerror = () => {
-            console.warn('Failed to load image:', cacheBustUrl);
+            console.warn('Failed to load image:', imageUrl);
             currentImage.classList.add('hidden');
             noImagePlaceholder.classList.remove('hidden');
         };

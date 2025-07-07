@@ -3,17 +3,20 @@
 
 // Image URL Priority Helper
 // Priority: local_image_url -> logo -> favicon
-function getFaviconUrl(station) {
-    if (station.local_image_url) {
-        return station.local_image_url;
+function getFaviconUrl(station, options = {}) {
+    // Use priority: local_image_url -> logo -> favicon
+    const imageUrl = station.local_image_url || station.logo || station.favicon;
+    
+    if (!imageUrl || imageUrl.trim() === '') {
+        return null;
     }
-    if (station.logo) {
-        return station.logo;
+    
+    // If it's a Supabase URL, add cache busting if requested
+    if (imageUrl.includes('supabase.co') && options.cacheBust) {
+        return `${imageUrl}?t=${Date.now()}`;
     }
-    if (station.favicon) {
-        return station.favicon;
-    }
-    return null;
+    
+    return imageUrl;
 }
 
 function debounce(func, wait) {
