@@ -42,6 +42,7 @@ model Station {
   streamUrl       String
   favicon         String?
   logo            String?
+  local_image_url String? // Our processed/managed image URL (currently Supabase)
   homepage        String?
   // Geographic coordinates
   latitude        Float?

@@ -1,6 +1,21 @@
 // Utilities Module
 // Helper functions, debounce, API calls, and general utilities
 
+// Image URL Priority Helper
+// Priority: local_image_url -> logo -> favicon
+function getFaviconUrl(station) {
+    if (station.local_image_url) {
+        return station.local_image_url;
+    }
+    if (station.logo) {
+        return station.logo;
+    }
+    if (station.favicon) {
+        return station.favicon;
+    }
+    return null;
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {

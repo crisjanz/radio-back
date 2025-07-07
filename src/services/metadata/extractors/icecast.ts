@@ -9,8 +9,41 @@ export interface IcecastMetadata {
   error?: string;
 }
 
+// Request deduplication - track in-progress requests
+const activeRequests = new Map<string, Promise<IcecastMetadata>>();
+const REQUEST_CACHE_DURATION = 45000; // 45 seconds - shorter than typical song length
+
+// Export cleanup function for emergency memory management
+export function clearActiveRequests() {
+  console.log(`🧹 Clearing ${activeRequests.size} active metadata requests`);
+  activeRequests.clear();
+}
+
 // Test if a stream supports Icecast/Shoutcast metadata
 export async function testIcecastMetadata(streamUrl: string): Promise<IcecastMetadata> {
+  // Check if we already have an active request for this stream
+  const existingRequest = activeRequests.get(streamUrl);
+  if (existingRequest) {
+    console.log('🔄 Reusing active metadata request for:', streamUrl);
+    return existingRequest;
+  }
+  
+  // Create new request and track it
+  const requestPromise = performMetadataRequest(streamUrl);
+  activeRequests.set(streamUrl, requestPromise);
+  
+  // Clean up tracking after completion
+  requestPromise.finally(() => {
+    setTimeout(() => {
+      activeRequests.delete(streamUrl);
+    }, REQUEST_CACHE_DURATION);
+  });
+  
+  return requestPromise;
+}
+
+// Actual metadata request implementation
+async function performMetadataRequest(streamUrl: string): Promise<IcecastMetadata> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -57,70 +90,78 @@ export async function testIcecastMetadata(streamUrl: string): Promise<IcecastMet
   }
 }
 
-// Extract current track from Icecast stream
+// Extract current track from Icecast stream with improved cleanup
 async function extractCurrentTrack(streamUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     console.log(`🎵 Extracting current track from: ${streamUrl}`);
     
     let resolved = false;
+    let radioStation: Parser | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const safeResolve = (value: string | undefined) => {
       if (!resolved) {
         resolved = true;
+        
+        // Clean up timeout
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        // Clean up parser with better error handling
+        if (radioStation) {
+          try {
+            radioStation.removeAllListeners();
+            radioStation.quitParsing();
+          } catch (e) {
+            console.log('🎵 Parser cleanup warning:', e instanceof Error ? e.message : 'Unknown error');
+          } finally {
+            radioStation = null;
+          }
+        }
+        
         resolve(value);
       }
     };
     
     try {
-      const radioStation = new Parser({ 
+      radioStation = new Parser({ 
         url: streamUrl,
         autoUpdate: false
       });
       
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
+      // Set up timeout with better cleanup
+      timeoutId = setTimeout(() => {
         console.log('🎵 Track extraction timeout');
-        try {
-          radioStation.quitParsing();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
         safeResolve(undefined);
-      }, 8000);
+      }, 6000); // Reduced from 8000ms
       
       // Listen for metadata
       radioStation.on('metadata', (metadata) => {
-        clearTimeout(timeoutId);
         const streamTitle = metadata.get('StreamTitle');
         
         if (streamTitle && streamTitle.trim().length > 0) {
           console.log(`🎵 Found track: ${streamTitle}`);
-          try {
-            radioStation.quitParsing();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
           safeResolve(streamTitle.trim());
         } else {
           console.log('🎵 No current track (likely between songs)');
-          try {
-            radioStation.quitParsing();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
           safeResolve(undefined);
         }
       });
       
       // Handle errors
       radioStation.on('error', (error) => {
-        clearTimeout(timeoutId);
         console.log('🎵 Parser error:', error.message);
-        try {
-          radioStation.quitParsing();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
         safeResolve(undefined);
+      });
+      
+      // Handle connection close
+      radioStation.on('close', () => {
+        console.log('🎵 Parser connection closed');
+        if (!resolved) {
+          safeResolve(undefined);
+        }
       });
       
     } catch (error) {

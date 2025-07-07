@@ -438,7 +438,19 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
 
     if (response.ok) {
       const scrapedData = await response.json();
-      res.json(scrapedData);
+      
+      // Transform response to match frontend expectations
+      if (scrapedData.success && scrapedData.data) {
+        // Single URL scraping - no conflicts by definition
+        res.json({
+          success: true,
+          hasConflicts: false,
+          data: scrapedData.data,
+          source: scrapedData.source || 'website'
+        });
+      } else {
+        res.json(scrapedData);
+      }
     } else {
       throw new Error('Failed to scrape website');
     }

@@ -263,8 +263,14 @@
         }
 
         function setBgTransparent() {
+            // Remove background rectangle if any
+            const existingBg = fabricCanvas.getObjects().find(obj => obj.id === 'background-rect');
+            if (existingBg) {
+                fabricCanvas.remove(existingBg);
+            }
             fabricCanvas.backgroundColor = 'transparent';
             fabricCanvas.renderAll();
+            console.log('🎨 Background set to transparent');
         }
 
         function addBorder() {
@@ -366,23 +372,70 @@
             }
 
             try {
-                // Convert canvas to blob
-                const dataURL = fabricCanvas.toDataURL('image/png', 1.0);
+                console.log('🎨 Starting save process for station:', stationData.id);
+                
+                // Debug canvas contents before export
+                console.log('🔍 Canvas objects before export:', fabricCanvas.getObjects().length);
+                fabricCanvas.getObjects().forEach((obj, index) => {
+                    console.log(`  Object ${index}:`, obj.type, obj.id || 'no-id');
+                });
+                
+                // Convert canvas to blob - ensure background is included
+                const dataURL = fabricCanvas.toDataURL({
+                    format: 'png',
+                    quality: 1.0,
+                    enableRetinaScaling: false,
+                    withoutTransform: false
+                });
+                console.log('📷 Canvas converted to dataURL, length:', dataURL.length);
+                console.log('🎨 Canvas background color:', fabricCanvas.backgroundColor);
+                
+                // Debug: Let's create a temporary img element to see what we're actually exporting
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    console.log('🖼️ Exported image dimensions:', tempImg.width, 'x', tempImg.height);
+                };
+                tempImg.src = dataURL;
+                
                 const response = await fetch(dataURL);
                 const blob = await response.blob();
+                console.log('📦 Blob created, size:', blob.size, 'type:', blob.type);
+                
+                // Debug: Create a temporary download link to see what we're actually exporting
+                const debugLink = document.createElement('a');
+                debugLink.href = URL.createObjectURL(blob);
+                debugLink.download = `debug-export-${stationData.id}.png`;
+                debugLink.textContent = '🔍 DOWNLOAD DEBUG IMAGE';
+                debugLink.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#ff0000;color:white;padding:20px;z-index:99999;font-size:16px;font-weight:bold;border:3px solid white;border-radius:10px;text-decoration:none;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+                document.body.appendChild(debugLink);
+                console.log('🔍 Debug download link created - BIG RED BUTTON in center of screen');
+                
+                // Remove debug link after 30 seconds
+                setTimeout(() => {
+                    if (debugLink.parentNode) {
+                        document.body.removeChild(debugLink);
+                        URL.revokeObjectURL(debugLink.href);
+                    }
+                }, 30000);
                 
                 // Upload to server
                 const formData = new FormData();
                 formData.append('image', blob, `${stationData.id}.png`);
+                console.log('📤 Uploading to server:', `/images/upload/${stationData.id}`);
                 
                 const uploadResponse = await fetch(`/images/upload/${stationData.id}`, {
                     method: 'POST',
                     body: formData
                 });
                 
+                console.log('📡 Upload response status:', uploadResponse.status);
+                
                 if (uploadResponse.ok) {
                     const result = await uploadResponse.json();
-                    alert(`✅ Image saved successfully!`);
+                    console.log('✅ Upload result:', result);
+                    
+                    // Show success message but don't block with alert yet
+                    console.log('✅ Image saved successfully!');
                     
                     // Notify parent window
                     if (window.opener) {
@@ -397,18 +450,41 @@
                     window.close();
                 } else {
                     const error = await uploadResponse.json();
+                    console.error('❌ Upload failed:', error);
                     alert(`❌ Failed to save: ${error.error}`);
                 }
             } catch (error) {
-                console.error('Error saving image:', error);
+                console.error('❌ Error saving image:', error);
                 alert('❌ Error saving image');
             }
         }
 
         // Background color change
         document.getElementById('bgColor').addEventListener('change', function(e) {
-            fabricCanvas.backgroundColor = e.target.value;
+            console.log('🎨 Setting background color to:', e.target.value);
+            
+            // Remove existing background rectangle if any
+            const existingBg = fabricCanvas.getObjects().find(obj => obj.id === 'background-rect');
+            if (existingBg) {
+                fabricCanvas.remove(existingBg);
+            }
+            
+            // Create a background rectangle instead of using canvas backgroundColor
+            const bgRect = new fabric.Rect({
+                left: 0,
+                top: 0,
+                width: fabricCanvas.width,
+                height: fabricCanvas.height,
+                fill: e.target.value,
+                selectable: false,
+                evented: false,
+                id: 'background-rect'
+            });
+            
+            fabricCanvas.add(bgRect);
+            fabricCanvas.sendToBack(bgRect);
             fabricCanvas.renderAll();
+            console.log('🎨 Background rectangle created with color:', e.target.value);
         });
     </script>
 </body>

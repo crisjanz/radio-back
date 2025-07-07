@@ -58,6 +58,7 @@ function populateStationEditor(station) {
     document.getElementById('edit-phone').value = station.phone || '';
     document.getElementById('edit-favicon').value = station.favicon || '';
     document.getElementById('edit-logo').value = station.logo || '';
+    document.getElementById('edit-local-image').value = station.local_image_url || '';
     document.getElementById('edit-address').value = station.address || '';
 
     // Clear and reset scraper tools for new station
@@ -83,6 +84,13 @@ function populateStationEditor(station) {
 
     // Load current image
     loadStationImage(station);
+    
+    // Update preview to match current download source selection
+    setTimeout(() => {
+        if (typeof updateImagePreview === 'function') {
+            updateImagePreview();
+        }
+    }, 100);
 
     // Load stream health
     loadStreamHealth(station);
@@ -277,6 +285,7 @@ function collectStationFormData() {
         phone: document.getElementById('edit-phone').value.trim(),
         favicon: document.getElementById('edit-favicon').value.trim(),
         logo: document.getElementById('edit-logo').value.trim(),
+        local_image_url: document.getElementById('edit-local-image').value.trim(),
         address: document.getElementById('edit-address').value.trim()
     };
 }

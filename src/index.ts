@@ -14,6 +14,8 @@ import authRoutes from './routes/auth.js';
 import favoritesRoutes from './routes/favorites.js';
 import testRoutes from './routes/test.js';
 import imageRoutes from './routes/images.js';
+import imageProxyRoutes from './routes/image-proxy.js';
+import { memoryMonitor } from './middleware/memoryMonitor.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -21,6 +23,7 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(memoryMonitor.middleware());
 
 // Serve static images and files
 app.use('/station-images', express.static('public/station-images'));
@@ -37,6 +40,7 @@ app.use('/auth', authRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/test', testRoutes);
 app.use('/images', imageRoutes);
+app.use('/image-proxy', imageProxyRoutes);
 
 // Admin routes for static HTML pages
 app.get('/admin/images', (req: Request, res: Response) => {
@@ -142,6 +146,18 @@ process.on('uncaughtException', (error) => {
   // For other critical errors, still exit
   console.error('💥 Critical error - shutting down server');
   process.exit(1);
+});
+
+// Register cleanup callback for emergency memory situations
+memoryMonitor.registerCleanupCallback(() => {
+  console.log('🧹 Emergency cleanup: Clearing metadata request cache');
+  // This will be imported and used to clear the cache
+  try {
+    // Import and clear the active requests map
+    require('./services/metadata/extractors/icecast.js').clearActiveRequests?.();
+  } catch (error) {
+    console.log('⚠️ Could not clear metadata cache:', error);
+  }
 });
 
 // Start server

@@ -33,14 +33,29 @@ async function downloadStationImage(event) {
             return;
         }
 
-        // Get input values - prioritizes logo URL over favicon URL
+        // Get input values and download source selection
         const faviconUrl = faviconInput.value?.trim() || '';
         const logoUrl = logoInput.value?.trim() || '';
-        const imageUrl = logoUrl || faviconUrl; // Prioritizes logo URL over favicon URL
+        const downloadSourceSelect = document.getElementById('download-source');
+        const downloadSource = downloadSourceSelect ? downloadSourceSelect.value : 'auto';
+        
+        // Determine which URL to use based on source selection
+        let imageUrl = '';
+        if (downloadSource === 'logo' && logoUrl) {
+            imageUrl = logoUrl;
+        } else if (downloadSource === 'favicon' && faviconUrl) {
+            imageUrl = faviconUrl;
+        } else {
+            // Auto mode - prioritize logo over favicon
+            imageUrl = logoUrl || faviconUrl;
+        }
 
         if (!imageUrl) {
-            console.error('No valid URL found in Logo URL or Favicon URL fields');
-            alert('Please enter a valid URL in either the Logo URL or Favicon URL field.');
+            const sourceMsg = downloadSource === 'logo' ? 'Logo URL field' : 
+                             downloadSource === 'favicon' ? 'Favicon URL field' : 
+                             'Logo URL or Favicon URL field';
+            console.error(`No valid URL found in ${sourceMsg}`);
+            alert(`Please enter a valid URL in the ${sourceMsg}.`);
             button.innerHTML = originalText;
             button.disabled = false;
             return;
@@ -62,7 +77,14 @@ async function downloadStationImage(event) {
         const selectedSize = sizeSelect ? sizeSelect.value : '512';
         const downloadSize = selectedSize === 'original' ? 2048 : parseInt(selectedSize);
 
-        console.log('Selected Size:', selectedSize, 'Download Size:', downloadSize);
+        console.log('Download Settings:', {
+            source: downloadSource,
+            size: selectedSize,
+            downloadSize: downloadSize,
+            selectedUrl: imageUrl,
+            logoUrl: logoUrl,
+            faviconUrl: faviconUrl
+        });
 
         // Determine endpoint and payload
         const stationId = currentEditingStation?.id && typeof currentEditingStation.id === 'number' ? currentEditingStation.id : null;
@@ -98,10 +120,23 @@ async function downloadStationImage(event) {
                 console.warn('Image preview elements not found');
             }
 
-            // Store the image data for later use
+            // Update the local image URL field in the editor
+            const localImageField = document.getElementById('edit-local-image');
+            if (localImageField && result.imageUrl) {
+                localImageField.value = result.imageUrl;
+                console.log('Updated local image URL field:', result.imageUrl);
+            }
+
+            // Update current editing station data
             if (currentEditingStation) {
+                currentEditingStation.local_image_url = result.imageUrl;
                 currentEditingStation._downloadedImageData = result.imageData || result.imageUrl || imageUrl;
                 currentEditingStation._downloadedImageUrl = imageUrl;
+            }
+
+            // Update preview to reflect the new local image
+            if (typeof updateImagePreview === 'function') {
+                updateImagePreview();
             }
 
             // Show success message
@@ -142,19 +177,34 @@ function editStationImage() {
         if (event.data && event.data.type === 'imageUpdated' && event.data.stationId === currentEditingStation.id) {
             // Reload the station image in the modal
             setTimeout(async () => {
+                console.log('🔄 Image editor saved, refreshing station data...');
+                
                 // Refresh station data from server to get updated image path
                 const response = await fetch(`/stations/${currentEditingStation.id}`);
                 if (response.ok) {
                     const updatedStation = await response.json();
+                    console.log('📊 Updated station data:', updatedStation);
+                    
                     currentEditingStation = updatedStation;
+                    
+                    // Update the local image URL field
+                    const localImageField = document.getElementById('edit-local-image');
+                    if (localImageField && updatedStation.local_image_url) {
+                        localImageField.value = updatedStation.local_image_url;
+                        console.log('✅ Updated local image URL field:', updatedStation.local_image_url);
+                    }
+                    
+                    // Reload current image with cache busting
                     loadStationImage(updatedStation);
                     
-                    // Update the preview if the same image
-                    const previewImage = document.getElementById('preview-image');
-                    const currentImage = document.getElementById('current-image');
-                    if (!previewImage.classList.contains('hidden')) {
-                        previewImage.src = currentImage.src + '?t=' + Date.now(); // Cache bust
+                    // Update the preview
+                    if (typeof updateImagePreview === 'function') {
+                        updateImagePreview();
                     }
+                    
+                    console.log('✅ Image display refreshed after edit');
+                } else {
+                    console.error('❌ Failed to refresh station data');
                 }
             }, 1000); // Small delay to ensure image is processed
             
@@ -179,15 +229,28 @@ function loadStationImage(station) {
         return;
     }
 
+    // Use priority logic: local_image_url -> logo -> favicon
     const imageUrl = getFaviconUrl(station);
     
+    console.log('Loading station image with priority:', {
+        local: station.local_image_url,
+        logo: station.logo,
+        favicon: station.favicon,
+        selected: imageUrl
+    });
+    
     if (imageUrl) {
-        currentImage.src = imageUrl;
+        // Add cache busting for Supabase URLs to ensure we get the latest image
+        const cacheBustUrl = imageUrl.includes('supabase.co') ? 
+            `${imageUrl}?t=${Date.now()}` : imageUrl;
+            
+        currentImage.src = cacheBustUrl;
         currentImage.classList.remove('hidden');
         noImagePlaceholder.classList.add('hidden');
         
         // Handle image load errors
         currentImage.onerror = () => {
+            console.warn('Failed to load image:', cacheBustUrl);
             currentImage.classList.add('hidden');
             noImagePlaceholder.classList.remove('hidden');
         };
@@ -197,11 +260,70 @@ function loadStationImage(station) {
     }
 }
 
+// Preview function for download source selection
+function updateImagePreview() {
+    if (!currentEditingStation) return;
+    
+    const downloadSourceSelect = document.getElementById('download-source');
+    const downloadSource = downloadSourceSelect ? downloadSourceSelect.value : 'auto';
+    const previewImage = document.getElementById('preview-image');
+    const previewPlaceholder = document.getElementById('preview-placeholder');
+    
+    if (!previewImage || !previewPlaceholder) return;
+    
+    // Get URLs from the form inputs (current values)
+    const faviconUrl = document.getElementById('edit-favicon')?.value?.trim() || '';
+    const logoUrl = document.getElementById('edit-logo')?.value?.trim() || '';
+    const localImageUrl = document.getElementById('edit-local-image')?.value?.trim() || '';
+    
+    // Determine which URL to preview based on source selection
+    let previewUrl = '';
+    if (downloadSource === 'logo' && logoUrl) {
+        previewUrl = logoUrl;
+    } else if (downloadSource === 'favicon' && faviconUrl) {
+        previewUrl = faviconUrl;
+    } else {
+        // Auto mode - use priority: local -> logo -> favicon
+        previewUrl = localImageUrl || logoUrl || faviconUrl;
+    }
+    
+    console.log('Preview update:', {
+        source: downloadSource,
+        url: previewUrl,
+        available: { local: localImageUrl, logo: logoUrl, favicon: faviconUrl }
+    });
+    
+    if (previewUrl) {
+        // Add cache busting for Supabase URLs to ensure we get the latest image
+        const cacheBustUrl = previewUrl.includes('supabase.co') ? 
+            `${previewUrl}?t=${Date.now()}` : previewUrl;
+            
+        previewImage.src = cacheBustUrl;
+        previewImage.classList.remove('hidden');
+        previewPlaceholder.classList.add('hidden');
+        
+        previewImage.onerror = () => {
+            console.warn('Preview image failed to load:', cacheBustUrl);
+            previewImage.classList.add('hidden');
+            previewPlaceholder.classList.remove('hidden');
+        };
+    } else {
+        previewImage.classList.add('hidden');
+        previewPlaceholder.classList.remove('hidden');
+    }
+}
+
 // Handle file upload
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('image-upload-input');
     if (fileInput) {
         fileInput.addEventListener('change', handleImageUpload);
+    }
+    
+    // Add event listener for download source selection
+    const downloadSourceSelect = document.getElementById('download-source');
+    if (downloadSourceSelect) {
+        downloadSourceSelect.addEventListener('change', updateImagePreview);
     }
 
     // Note: downloadStationImage is called via onclick attribute, no duplicate listener needed
