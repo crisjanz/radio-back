@@ -113,7 +113,9 @@ async function extractCurrentTrack(streamUrl: string): Promise<string | undefine
         if (radioStation) {
           try {
             radioStation.removeAllListeners();
-            radioStation.quitParsing();
+            if (typeof radioStation.quitParsing === 'function') {
+              radioStation.quitParsing();
+            }
           } catch (e) {
             console.log('🎵 Parser cleanup warning:', e instanceof Error ? e.message : 'Unknown error');
           } finally {
