@@ -5,6 +5,36 @@ import { PrismaClient } from '@prisma/client';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Smart ID gap-filling utility function
+async function getNextAvailableStationId(): Promise<number> {
+  try {
+    // Get all existing station IDs in ascending order
+    const existingIds = await prisma.station.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' }
+    });
+    
+    // Find the first gap in the sequence
+    let expectedId = 1;
+    for (const station of existingIds) {
+      if (station.id !== expectedId) {
+        // Found a gap! Return the missing ID
+        console.log(`🔢 Found ID gap: using ID ${expectedId} instead of next sequential ID`);
+        return expectedId;
+      }
+      expectedId++;
+    }
+    
+    // No gaps found, return the next sequential ID
+    console.log(`🔢 No ID gaps found: using next sequential ID ${expectedId}`);
+    return expectedId;
+  } catch (error) {
+    console.error('❌ Error finding available station ID:', error);
+    // Fallback to letting Postgres handle auto-increment
+    throw error;
+  }
+}
+
 // Get all stations with optional pagination
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -228,10 +258,63 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Add station
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const station = await prisma.station.create({ data: req.body });
+    const stationData = req.body;
+    
+    // Check for duplicates before creating
+    if (stationData.streamUrl || (stationData.name && stationData.country)) {
+      const existing = await prisma.station.findFirst({
+        where: {
+          OR: [
+            ...(stationData.streamUrl ? [{ streamUrl: stationData.streamUrl }] : []),
+            ...(stationData.name && stationData.country ? [{ 
+              name: stationData.name, 
+              country: stationData.country 
+            }] : [])
+          ]
+        }
+      });
+
+      if (existing) {
+        console.log(`⚠️ Duplicate station detected: "${stationData.name}" already exists as ID ${existing.id}`);
+        return res.status(409).json({ 
+          error: 'Station already exists',
+          duplicate: true,
+          existingStation: existing
+        });
+      }
+    }
+    
+    // Get the optimal ID (fills gaps if available)
+    const optimalId = await getNextAvailableStationId();
+    
+    // Create station with the optimal ID
+    const station = await prisma.station.create({ 
+      data: {
+        id: optimalId,
+        ...stationData
+      }
+    });
+    
+    console.log(`✅ Created station "${station.name}" with ID ${station.id}`);
     res.json(station);
   } catch (error) {
     console.error('❌ Error creating station:', error);
+    
+    // If ID assignment failed, try without explicit ID (fallback to auto-increment)
+    if (error instanceof Error && error.message.includes('unique constraint')) {
+      console.log('🔄 ID conflict detected, falling back to auto-increment...');
+      try {
+        const station = await prisma.station.create({ data: req.body });
+        console.log(`✅ Created station "${station.name}" with auto-generated ID ${station.id}`);
+        res.json(station);
+        return;
+      } catch (fallbackError) {
+        console.error('❌ Fallback creation also failed:', fallbackError);
+        res.status(500).json({ error: 'Failed to create station' });
+        return;
+      }
+    }
+    
     res.status(500).json({ error: 'Failed to create station' });
   }
 });

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Editor</title>
+    <script src="https://unpkg.com/fabric@5.3.0/dist/fabric.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .canvas-container { 
+            border: 2px solid #e5e7eb; 
+            border-radius: 8px; 
+            background: #f9fafb; 
+        }
+        .control-panel { 
+            background: white; 
+            border-radius: 12px; 
+            padding: 16px; 
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); 
+        }
+        .btn { 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            font-weight: 500; 
+            transition: all 0.2s; 
+            cursor: pointer; 
+            border: none; 
+            font-size: 14px;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .input-field { 
+            padding: 8px 12px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 6px; 
+            width: 100%; 
+            font-size: 14px;
+        }
+        .input-field:focus { outline: none; border-color: #3b82f6; }
+        .slider { 
+            width: 100%; 
+            height: 6px; 
+            border-radius: 3px; 
+            background: #e5e7eb; 
+            outline: none; 
+        }
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex h-screen">
+        <!-- Left Panel - Controls -->
+        <div class="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto">
+            <div class="mb-6">
+                <h1 class="text-xl font-bold text-gray-900 mb-2">
+                    <i class="fas fa-image mr-2 text-blue-600"></i>
+                    Image Editor
+                </h1>
+                <p class="text-sm text-gray-600" id="station-info">Loading...</p>
+            </div>
+
+            <!-- Canvas Size -->
+            <div class="control-panel mb-4">
+                <h3 class="font-semibold mb-3 text-gray-900">Canvas Size</h3>
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button onclick="resizeCanvas(256)" class="btn btn-secondary text-xs">256px</button>
+                    <button onclick="resizeCanvas(512)" class="btn btn-primary text-xs">512px</button>
+                    <button onclick="resizeCanvas(1024)" class="btn btn-secondary text-xs">1024px</button>
+                </div>
+            </div>
+
+            <!-- Background -->
+            <div class="control-panel mb-4">
+                <h3 class="font-semibold mb-3 text-gray-900">Background</h3>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <input type="color" id="bgColor" value="#ffffff" class="w-full h-10 border border-gray-300 rounded cursor-pointer">
+                    <button onclick="setBgTransparent()" class="btn btn-secondary text-xs">Transparent</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="addBorder()" class="btn btn-secondary text-xs">Add Border</button>
+                    <button onclick="addGradient()" class="btn btn-secondary text-xs">Gradient</button>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="control-panel mb-4">
+                <h3 class="font-semibold mb-3 text-gray-900">Filters</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm text-gray-700 mb-1">Brightness</label>
+                        <input type="range" id="brightness" min="-100" max="100" value="0" class="slider" oninput="applyFilters()">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 mb-1">Contrast</label>
+                        <input type="range" id="contrast" min="-100" max="100" value="0" class="slider" oninput="applyFilters()">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 mb-1">Saturation</label>
+                        <input type="range" id="saturation" min="-100" max="100" value="0" class="slider" oninput="applyFilters()">
+                    </div>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                    <button onclick="applySepia()" class="btn btn-secondary text-xs">Sepia</button>
+                    <button onclick="applyGrayscale()" class="btn btn-secondary text-xs">Grayscale</button>
+                </div>
+            </div>
+
+            <!-- Transform -->
+            <div class="control-panel mb-4">
+                <h3 class="font-semibold mb-3 text-gray-900">Transform</h3>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <button onclick="rotateImage(-90)" class="btn btn-secondary text-xs">
+                        <i class="fas fa-undo mr-1"></i>Rotate Left
+                    </button>
+                    <button onclick="rotateImage(90)" class="btn btn-secondary text-xs">
+                        <i class="fas fa-redo mr-1"></i>Rotate Right
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="flipImage('horizontal')" class="btn btn-secondary text-xs">Flip H</button>
+                    <button onclick="flipImage('vertical')" class="btn btn-secondary text-xs">Flip V</button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="space-y-3 mt-6">
+                <button onclick="resetImage()" class="w-full btn btn-secondary">
+                    <i class="fas fa-undo mr-2"></i>Reset
+                </button>
+                <button onclick="saveImage()" class="w-full btn btn-success">
+                    <i class="fas fa-save mr-2"></i>Save Image
+                </button>
+                <button onclick="window.close()" class="w-full btn btn-danger">
+                    <i class="fas fa-times mr-2"></i>Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel - Canvas -->
+        <div class="flex-1 p-6 flex items-center justify-center">
+            <div class="canvas-container">
+                <canvas id="fabricCanvas" width="512" height="512"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fabricCanvas = null;
+        let currentImage = null;
+        let originalImageData = null;
+        let stationData = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initCanvas();
+            loadStationFromURL();
+        });
+
+        function initCanvas() {
+            fabricCanvas = new fabric.Canvas('fabricCanvas', {
+                width: 512,
+                height: 512,
+                backgroundColor: '#ffffff'
+            });
+        }
+
+        async function loadStationFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const stationId = urlParams.get('stationId');
+            const stationName = urlParams.get('stationName');
+            
+            if (!stationId) {
+                document.getElementById('station-info').textContent = 'No station specified';
+                return;
+            }
+
+            try {
+                // Load station data
+                const stationResponse = await fetch(`/stations/${stationId}`);
+                if (stationResponse.ok) {
+                    stationData = await stationResponse.json();
+                    document.getElementById('station-info').textContent = `Editing: ${stationData.name}`;
+                    
+                    // Load current image if exists
+                    const imageResponse = await fetch(`/images/info/${stationId}`);
+                    if (imageResponse.ok) {
+                        const imageInfo = await imageResponse.json();
+                        
+                        let imageUrl = null;
+                        if (imageInfo.hasLocalImage && imageInfo.localImageUrl) {
+                            imageUrl = imageInfo.localImageUrl;
+                        } else if (imageInfo.station.favicon) {
+                            imageUrl = imageInfo.station.favicon;
+                        }
+                        
+                        if (imageUrl) {
+                            // Add cache busting for Supabase URLs to ensure we get the latest image
+                            const cacheBustUrl = imageUrl.includes('supabase.co') ? 
+                                `${imageUrl}?t=${Date.now()}` : imageUrl;
+                            loadImageIntoCanvas(cacheBustUrl);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading station:', error);
+                document.getElementById('station-info').textContent = 'Error loading station';
+            }
+        }
+
+        function loadImageIntoCanvas(imageUrl) {
+            fabric.Image.fromURL(imageUrl, function(img) {
+                // Clear canvas
+                fabricCanvas.clear();
+                fabricCanvas.backgroundColor = '#ffffff';
+                
+                // Scale image to fit canvas
+                const canvasSize = fabricCanvas.width;
+                const scale = Math.min(canvasSize / img.width, canvasSize / img.height);
+                
+                img.set({
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: (canvasSize - img.width * scale) / 2,
+                    top: (canvasSize - img.height * scale) / 2
+                });
+                
+                fabricCanvas.add(img);
+                fabricCanvas.renderAll();
+                
+                currentImage = img;
+                
+                // Store original for reset
+                originalImageData = {
+                    src: imageUrl,
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: img.left,
+                    top: img.top
+                };
+            }, { crossOrigin: 'anonymous' });
+        }
+
+        function resizeCanvas(size) {
+            const currentBg = fabricCanvas.backgroundColor;
+            fabricCanvas.setDimensions({ width: size, height: size });
+            fabricCanvas.backgroundColor = currentBg;
+            fabricCanvas.renderAll();
+        }
+
+        function setBgTransparent() {
+            // Remove background rectangle if any
+            const existingBg = fabricCanvas.getObjects().find(obj => obj.id === 'background-rect');
+            if (existingBg) {
+                fabricCanvas.remove(existingBg);
+            }
+            fabricCanvas.backgroundColor = 'transparent';
+            fabricCanvas.renderAll();
+            console.log('🎨 Background set to transparent');
+        }
+
+        function addBorder() {
+            const rect = new fabric.Rect({
+                left: 10,
+                top: 10,
+                width: fabricCanvas.width - 20,
+                height: fabricCanvas.height - 20,
+                fill: 'transparent',
+                stroke: '#000000',
+                strokeWidth: 4
+            });
+            fabricCanvas.add(rect);
+        }
+
+        function addGradient() {
+            const gradient = new fabric.Gradient({
+                type: 'linear',
+                coords: { x1: 0, y1: 0, x2: fabricCanvas.width, y2: fabricCanvas.height },
+                colorStops: [
+                    { offset: 0, color: '#667eea' },
+                    { offset: 1, color: '#764ba2' }
+                ]
+            });
+            fabricCanvas.backgroundColor = gradient;
+            fabricCanvas.renderAll();
+        }
+
+        function applyFilters() {
+            if (!currentImage) return;
+            
+            const brightness = document.getElementById('brightness').value / 100;
+            const contrast = document.getElementById('contrast').value / 100;
+            const saturation = document.getElementById('saturation').value / 100;
+            
+            currentImage.filters = [];
+            
+            if (brightness !== 0) {
+                currentImage.filters.push(new fabric.Image.filters.Brightness({ brightness }));
+            }
+            if (contrast !== 0) {
+                currentImage.filters.push(new fabric.Image.filters.Contrast({ contrast }));
+            }
+            if (saturation !== 0) {
+                currentImage.filters.push(new fabric.Image.filters.Saturation({ saturation }));
+            }
+            
+            currentImage.applyFilters();
+            fabricCanvas.renderAll();
+        }
+
+        function applySepia() {
+            if (!currentImage) return;
+            currentImage.filters.push(new fabric.Image.filters.Sepia());
+            currentImage.applyFilters();
+            fabricCanvas.renderAll();
+        }
+
+        function applyGrayscale() {
+            if (!currentImage) return;
+            currentImage.filters.push(new fabric.Image.filters.Grayscale());
+            currentImage.applyFilters();
+            fabricCanvas.renderAll();
+        }
+
+        function rotateImage(angle) {
+            if (!currentImage) return;
+            currentImage.rotate(currentImage.angle + angle);
+            fabricCanvas.renderAll();
+        }
+
+        function flipImage(direction) {
+            if (!currentImage) return;
+            if (direction === 'horizontal') {
+                currentImage.set('flipX', !currentImage.flipX);
+            } else {
+                currentImage.set('flipY', !currentImage.flipY);
+            }
+            fabricCanvas.renderAll();
+        }
+
+        function resetImage() {
+            if (!originalImageData || !stationData) return;
+            
+            // Reload original image
+            loadImageIntoCanvas(originalImageData.src);
+            
+            // Reset sliders
+            document.getElementById('brightness').value = 0;
+            document.getElementById('contrast').value = 0;
+            document.getElementById('saturation').value = 0;
+            document.getElementById('bgColor').value = '#ffffff';
+        }
+
+        async function saveImage() {
+            if (!stationData) {
+                alert('No station data available');
+                return;
+            }
+
+            try {
+                console.log('🎨 Starting save process for station:', stationData.id);
+                
+                // Debug canvas contents before export
+                console.log('🔍 Canvas objects before export:', fabricCanvas.getObjects().length);
+                fabricCanvas.getObjects().forEach((obj, index) => {
+                    console.log(`  Object ${index}:`, obj.type, obj.id || 'no-id');
+                });
+                
+                // Convert canvas to blob - ensure background is included
+                const dataURL = fabricCanvas.toDataURL({
+                    format: 'png',
+                    quality: 1.0,
+                    enableRetinaScaling: false,
+                    withoutTransform: false
+                });
+                console.log('📷 Canvas converted to dataURL, length:', dataURL.length);
+                console.log('🎨 Canvas background color:', fabricCanvas.backgroundColor);
+                
+                // Debug: Let's create a temporary img element to see what we're actually exporting
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    console.log('🖼️ Exported image dimensions:', tempImg.width, 'x', tempImg.height);
+                };
+                tempImg.src = dataURL;
+                
+                const response = await fetch(dataURL);
+                const blob = await response.blob();
+                console.log('📦 Blob created, size:', blob.size, 'type:', blob.type);
+                
+                // Debug: Create a temporary download link to see what we're actually exporting
+                const debugLink = document.createElement('a');
+                debugLink.href = URL.createObjectURL(blob);
+                debugLink.download = `debug-export-${stationData.id}.png`;
+                debugLink.textContent = '🔍 DOWNLOAD DEBUG IMAGE';
+                debugLink.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#ff0000;color:white;padding:20px;z-index:99999;font-size:16px;font-weight:bold;border:3px solid white;border-radius:10px;text-decoration:none;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+                document.body.appendChild(debugLink);
+                console.log('🔍 Debug download link created - BIG RED BUTTON in center of screen');
+                
+                // Remove debug link after 30 seconds
+                setTimeout(() => {
+                    if (debugLink.parentNode) {
+                        document.body.removeChild(debugLink);
+                        URL.revokeObjectURL(debugLink.href);
+                    }
+                }, 30000);
+                
+                // Upload to server
+                const formData = new FormData();
+                formData.append('image', blob, `${stationData.id}.png`);
+                console.log('📤 Uploading to server:', `/images/upload/${stationData.id}`);
+                
+                const uploadResponse = await fetch(`/images/upload/${stationData.id}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('📡 Upload response status:', uploadResponse.status);
+                
+                if (uploadResponse.ok) {
+                    const result = await uploadResponse.json();
+                    console.log('✅ Upload result:', result);
+                    
+                    // Show success message but don't block with alert yet
+                    console.log('✅ Image saved successfully!');
+                    
+                    // Notify parent window
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'imageUpdated',
+                            stationId: stationData.id,
+                            stationName: stationData.name
+                        }, '*');
+                    }
+                    
+                    // Close window
+                    window.close();
+                } else {
+                    const error = await uploadResponse.json();
+                    console.error('❌ Upload failed:', error);
+                    alert(`❌ Failed to save: ${error.error}`);
+                }
+            } catch (error) {
+                console.error('❌ Error saving image:', error);
+                alert('❌ Error saving image');
+            }
+        }
+
+        // Background color change
+        document.getElementById('bgColor').addEventListener('change', function(e) {
+            console.log('🎨 Setting background color to:', e.target.value);
+            
+            // Remove existing background rectangle if any
+            const existingBg = fabricCanvas.getObjects().find(obj => obj.id === 'background-rect');
+            if (existingBg) {
+                fabricCanvas.remove(existingBg);
+            }
+            
+            // Create a background rectangle instead of using canvas backgroundColor
+            const bgRect = new fabric.Rect({
+                left: 0,
+                top: 0,
+                width: fabricCanvas.width,
+                height: fabricCanvas.height,
+                fill: e.target.value,
+                selectable: false,
+                evented: false,
+                id: 'background-rect'
+            });
+            
+            fabricCanvas.add(bgRect);
+            fabricCanvas.sendToBack(bgRect);
+            fabricCanvas.renderAll();
+            console.log('🎨 Background rectangle created with color:', e.target.value);
+        });
+    </script>
+</body>
+</html>

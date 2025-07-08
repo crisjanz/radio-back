@@ -32,6 +32,9 @@
                     <span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">Admin</span>
                 </div>
                 <div class="flex items-center space-x-4">
+                    <a href="/admin/cleanup" class="text-gray-600 hover:text-gray-900 text-sm">
+                        <i class="fas fa-broom mr-1"></i>Cleanup
+                    </a>
                     <a href="/admin/memory" class="text-gray-600 hover:text-gray-900 text-sm">Memory Monitor</a>
                     <a href="/admin/stations/edit" class="text-gray-600 hover:text-gray-900 text-sm">Station Editor</a>
                 </div>
@@ -50,7 +53,7 @@
         </div>
 
         <!-- Main Action Cards -->
-        <div class="grid md:grid-cols-2 gap-8 mb-12">
+        <div class="grid md:grid-cols-3 gap-6 mb-12">
             <!-- Edit Existing Stations Card -->
             <div class="bg-white rounded-2xl shadow-lg border border-gray-200 card-hover">
                 <div class="p-8">
@@ -127,6 +130,46 @@
                             class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200">
                         <i class="fas fa-download mr-2"></i>
                         Import New Stations
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cleanup Duplicates Card -->
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 card-hover">
+                <div class="p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="feature-icon w-12 h-12 rounded-xl flex items-center justify-center text-white mr-4" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+                            <i class="fas fa-broom text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">Cleanup Duplicates</h3>
+                            <p class="text-gray-600 text-sm">Remove duplicate stations from your database</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-search w-4 text-center mr-3 text-red-500"></i>
+                            <span>Smart duplicate detection</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-clone w-4 text-center mr-3 text-red-500"></i>
+                            <span>Multiple detection methods</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-magic w-4 text-center mr-3 text-red-500"></i>
+                            <span>Bulk auto cleanup options</span>
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-shield-alt w-4 text-center mr-3 text-red-500"></i>
+                            <span>Safe deletion with confirmations</span>
+                        </div>
+                    </div>
+                    
+                    <button onclick="openCleanupTool()" 
+                            class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200">
+                        <i class="fas fa-broom mr-2"></i>
+                        Cleanup Duplicates
                     </button>
                 </div>
             </div>
@@ -217,6 +260,10 @@
 
         function openImportWizard() {
             window.location.href = '/admin/stations/import';
+        }
+
+        function openCleanupTool() {
+            window.location.href = '/admin/cleanup';
         }
 
         function showLoading() {

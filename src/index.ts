@@ -17,9 +17,13 @@ import imageRoutes from './routes/images.js';
 import imageProxyRoutes from './routes/image-proxy.js';
 import memoryRoutes from './routes/memory.js';
 import { memoryMonitor } from './middleware/memoryMonitor.js';
+import path from 'path';
+
 
 const app = express();
 const prisma = new PrismaClient();
+
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Middleware
 app.use(cors());
@@ -29,6 +33,8 @@ app.use(memoryMonitor.middleware());
 // Serve static images and files
 app.use('/station-images', express.static('public/station-images'));
 app.use('/public', express.static('public'));
+app.use('/js', express.static('public/js'));
+app.use('/components', express.static('public/components'));
 
 // Route handlers
 app.use('/stations', stationRoutes);
@@ -55,6 +61,18 @@ app.get('/admin/stations/edit', (req: Request, res: Response) => {
 
 app.get('/admin/memory', (req: Request, res: Response) => {
   res.sendFile('admin-memory.html', { root: 'public' });
+});
+
+app.get('/admin/simple-image-editor', (req: Request, res: Response) => {
+  res.sendFile('simple-image-editor.html', { root: 'public' });
+});
+
+app.get('/admin/stations/import', (req: Request, res: Response) => {
+  res.sendFile('admin-stations-import.html', { root: 'public' });
+});
+
+app.get('/admin/cleanup', (req: Request, res: Response) => {
+  res.sendFile('admin-cleanup.html', { root: 'public' });
 });
 
 app.get('/ping', async (req, res) => {

@@ -334,3 +334,79 @@ function omit(obj, keys) {
         return omitted;
     }, {});
 }
+
+// Modal Loading Utilities
+let modalLoaded = false;
+
+async function loadStationEditorModal() {
+    // Only load if not already loaded
+    if (modalLoaded || document.getElementById('station-editor-modal')) {
+        return true;
+    }
+    
+    try {
+        console.log('🔄 Loading station editor modal...');
+        const response = await fetch('/components/station-editor-modal.html');
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load modal: ${response.status}`);
+        }
+        
+        // Use arrayBuffer to avoid text encoding issues
+        const arrayBuffer = await response.arrayBuffer();
+        const decoder = new TextDecoder('utf-8');
+        const modalHTML = decoder.decode(arrayBuffer);
+        
+        console.log(`📄 Modal HTML loaded: ${modalHTML.length} characters`);
+        
+        // Create a temporary container and clone the modal
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = modalHTML;
+        
+        // Get the modal element
+        const modalElement = tempContainer.firstElementChild;
+        if (!modalElement) {
+            throw new Error('No modal element found in HTML');
+        }
+        
+        // Clone and append to body
+        const clonedModal = modalElement.cloneNode(true);
+        document.body.appendChild(clonedModal);
+        
+        // Small delay to ensure DOM is updated
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Verify the modal and all required elements were loaded correctly
+        const insertedModal = document.getElementById('station-editor-modal');
+        const stationIdElement = document.getElementById('editor-station-id');
+        const stationNameElement = document.getElementById('editor-station-name');
+        
+        if (!insertedModal) {
+            throw new Error('Modal element not found after loading');
+        }
+        
+        if (!stationIdElement) {
+            throw new Error('Station ID element not found after loading');
+        }
+        
+        if (!stationNameElement) {
+            throw new Error('Station name element not found after loading');
+        }
+        
+        modalLoaded = true;
+        console.log('✅ Station editor modal loaded successfully');
+        console.log(`📋 Modal element inserted: ${insertedModal.outerHTML.length} characters`);
+        return true;
+    } catch (error) {
+        console.error('❌ Error loading station editor modal:', error);
+        return false;
+    }
+}
+
+// Ensure modal is loaded before opening
+async function ensureModalLoaded() {
+    if (!modalLoaded) {
+        return await loadStationEditorModal();
+    }
+    return true;
+}

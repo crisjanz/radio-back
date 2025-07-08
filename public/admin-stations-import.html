@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import New Stations - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .station-row {
+            transition: all 0.2s ease;
+        }
+        .station-row:hover {
+            background-color: #f8fafc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        .status-imported {
+            background-color: #dcfce7;
+            border-color: #86efac;
+        }
+        .status-exists {
+            background-color: #fef3c7;
+            border-color: #fcd34d;
+        }
+        .filter-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .search-btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        }
+        .import-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .health-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .health-green { background-color: #10b981; }
+        .health-yellow { background-color: #f59e0b; }
+        .health-red { background-color: #ef4444; }
+        .health-gray { background-color: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/admin/stations" class="text-gray-600 hover:text-gray-900 mr-4">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <h1 class="text-xl font-bold text-gray-900">Import New Stations</h1>
+                    <span class="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">Admin</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600">
+                        <span id="results-count">0</span> stations found
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Search & Filters Section -->
+        <div class="filter-section rounded-xl shadow-sm border border-gray-200 p-6 mb-6 text-white">
+            <h2 class="text-lg font-semibold mb-4 flex items-center">
+                <i class="fas fa-search mr-2"></i>
+                Search Radio Browser
+            </h2>
+            
+            <!-- Station Name Search -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Station Name</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                    <input type="text" 
+                           id="filter-name" 
+                           placeholder="Search by station name (e.g., 'BBC Radio 1', 'KEXP', 'NPR', etc.)"
+                           class="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-500">
+                </div>
+                <p class="text-sm text-gray-500 mt-1">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Search for specific stations by name. Can be combined with filters below for better results.
+                </p>
+            </div>
+            
+            <!-- Filter Options -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Country</label>
+                    <select id="filter-country" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Countries</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">State/Region</label>
+                    <select id="filter-state" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" disabled>
+                        <option value="">All States</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Min Votes</label>
+                    <select id="filter-votes" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="0">Any</option>
+                        <option value="1">1+</option>
+                        <option value="5">5+</option>
+                        <option value="10">10+</option>
+                        <option value="25">25+</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Min Bitrate</label>
+                    <select id="filter-bitrate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="0">Any</option>
+                        <option value="64">64 kbps+</option>
+                        <option value="128">128 kbps+</option>
+                        <option value="192">192 kbps+</option>
+                        <option value="256">256 kbps+</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Order By</label>
+                    <select id="filter-order" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="clickcount">Popularity</option>
+                        <option value="votes">Votes</option>
+                        <option value="name">Name</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Limit</label>
+                    <select id="filter-limit" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="50">50 stations</option>
+                        <option value="100">100 stations</option>
+                        <option value="200">200 stations</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <label class="flex items-center text-sm">
+                        <input type="checkbox" id="filter-geo" class="mr-2 rounded">
+                        Has GPS coordinates
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex justify-center space-x-4">
+                <button onclick="searchStations()" class="search-btn text-white font-medium py-3 px-8 rounded-xl hover:opacity-90 transition-opacity">
+                    <i class="fas fa-search mr-2"></i>
+                    Search Stations
+                </button>
+                <button onclick="addStationManually()" class="bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-8 rounded-xl transition-colors">
+                    <i class="fas fa-plus mr-2"></i>
+                    Add Station Manually
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="hidden text-center py-12">
+            <div class="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600">Searching Radio Browser...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="hidden">
+            <!-- Bulk Actions -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="selectAll()" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                            <i class="fas fa-check-square mr-1"></i>
+                            Select All
+                        </button>
+                        <button onclick="selectNone()" class="text-gray-600 hover:text-gray-700 text-sm font-medium">
+                            <i class="fas fa-square mr-1"></i>
+                            Select None
+                        </button>
+                        <span class="text-sm text-gray-500">|</span>
+                        <span class="text-sm text-gray-600">
+                            <span id="selected-count">0</span> selected
+                        </span>
+                    </div>
+                    <button onclick="bulkImportSelected()" class="import-btn text-white font-medium py-2 px-6 rounded-lg hover:opacity-90 transition-opacity">
+                        <i class="fas fa-download mr-2"></i>
+                        Bulk Import Selected
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="w-8 px-6 py-3 text-center">
+                                    <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                </th>
+                                <th class="w-16 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Station</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quality</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stations-list" class="bg-white divide-y divide-gray-200">
+                            <!-- Station rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="text-center py-12">
+            <div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-radio text-2xl text-blue-600"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Ready to Import Stations</h3>
+            <p class="text-gray-600 mb-6">Use the search filters above to find stations from Radio Browser</p>
+        </div>
+    </div>
+
+    <!-- Station Editor Modal Container -->
+    <div id="station-editor-container"></div>
+
+    <!-- File Upload Input (Hidden) -->
+    <input type="file" id="image-upload-input" accept="image/*" class="hidden">
+
+    <script src="/js/utilities.js"></script>
+    <script src="/js/ui-rendering.js"></script>
+    <script src="/js/station-editor.js"></script>
+    <script src="/js/image-management.js"></script>
+
+    <!-- Import-specific JavaScript -->
+    <script>
+        // Import page variables
+        let searchResults = [];
+        let selectedStationIds = new Set();
+        let importedStations = new Set();
+        let duplicateStations = new Map(); // Maps station index to existing station info
+        let countries = [];
+        let states = [];
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Load the station editor modal on page load
+            await loadStationEditorModal();
+            
+            loadCountries();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Country change loads states
+            document.getElementById('filter-country').addEventListener('change', function(e) {
+                const country = e.target.value;
+                if (country) {
+                    loadStates(country);
+                } else {
+                    document.getElementById('filter-state').innerHTML = '<option value="">All States</option>';
+                    document.getElementById('filter-state').disabled = true;
+                }
+            });
+        }
+
+        async function loadCountries() {
+            try {
+                const response = await fetch('/import/countries');
+                if (response.ok) {
+                    const data = await response.json();
+                    countries = data.countries || [];
+                    
+                    const select = document.getElementById('filter-country');
+                    select.innerHTML = '<option value="">All Countries</option>';
+                    
+                    countries.forEach(country => {
+                        const option = document.createElement('option');
+                        option.value = country;
+                        option.textContent = country;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load countries:', error);
+                showError('Failed to load countries list');
+            }
+        }
+
+        async function loadStates(country) {
+            try {
+                const response = await fetch(`/import/states/${encodeURIComponent(country)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    states = data.states || [];
+                    
+                    const select = document.getElementById('filter-state');
+                    select.innerHTML = '<option value="">All States</option>';
+                    
+                    if (states.length > 0) {
+                        states.forEach(state => {
+                            const option = document.createElement('option');
+                            option.value = state;
+                            option.textContent = state;
+                            select.appendChild(option);
+                        });
+                        select.disabled = false;
+                    } else {
+                        select.disabled = true;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load states:', error);
+                showError('Failed to load states list');
+            }
+        }
+
+        let allExistingStations = [];
+
+        async function loadAllStations() {
+            try {
+                console.log('🔄 Loading existing stations for duplicate checking...');
+                const response = await fetch('/stations');
+                if (response.ok) {
+                    allExistingStations = await response.json();
+                    console.log(`✅ Loaded ${allExistingStations.length} existing stations`);
+                } else {
+                    console.error('Failed to load existing stations:', response.status);
+                }
+            } catch (error) {
+                console.error('❌ Error loading existing stations:', error);
+            }
+        }
+
+        async function checkDuplicates() {
+            console.log('🔍 Checking for duplicates...');
+            duplicateStations.clear();
+            
+            // Load existing stations if not already loaded
+            if (allExistingStations.length === 0) {
+                await loadAllStations();
+            }
+            
+            try {
+                // Check each search result against existing stations
+                for (let i = 0; i < searchResults.length; i++) {
+                    const station = searchResults[i];
+                    const streamUrl = station.url_resolved || station.url;
+                    
+                    // Find exact matches using the same logic as backend
+                    const duplicate = allExistingStations.find(existing => {
+                        // Check by stream URL first (most reliable)
+                        if (streamUrl && existing.streamUrl === streamUrl) {
+                            return true;
+                        }
+                        
+                        // Check by name + country combination
+                        if (station.name && station.country && 
+                            existing.name === station.name && existing.country === station.country) {
+                            return true;
+                        }
+                        
+                        return false;
+                    });
+                    
+                    if (duplicate) {
+                        duplicateStations.set(i, duplicate);
+                        console.log(`⚠️ Duplicate found: "${station.name}" matches existing station ID ${duplicate.id}`);
+                    }
+                }
+                
+                console.log(`✅ Duplicate check complete: ${duplicateStations.size} duplicates found`);
+            } catch (error) {
+                console.error('❌ Error checking duplicates:', error);
+            }
+        }
+
+        async function searchStations() {
+            // Show loading state
+            document.getElementById('loading-state').classList.remove('hidden');
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            try {
+                // Build search parameters
+                const params = new URLSearchParams({
+                    name: document.getElementById('filter-name').value,
+                    country: document.getElementById('filter-country').value,
+                    state: document.getElementById('filter-state').value,
+                    minVotes: document.getElementById('filter-votes').value,
+                    minBitrate: document.getElementById('filter-bitrate').value,
+                    hasGeo: document.getElementById('filter-geo').checked.toString(),
+                    hidebroken: 'true',
+                    order: document.getElementById('filter-order').value,
+                    limit: document.getElementById('filter-limit').value
+                });
+
+                const response = await fetch(`/import/preview?${params.toString()}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Search failed: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                searchResults = data.stations || [];
+                
+                // Check for duplicates against existing stations
+                await checkDuplicates();
+                
+                // Update UI
+                document.getElementById('results-count').textContent = searchResults.length;
+                
+                if (searchResults.length > 0) {
+                    renderStationResults();
+                    document.getElementById('results-section').classList.remove('hidden');
+                } else {
+                    document.getElementById('empty-state').classList.remove('hidden');
+                }
+
+            } catch (error) {
+                console.error('Search failed:', error);
+                showError('Failed to search stations: ' + error.message);
+                document.getElementById('empty-state').classList.remove('hidden');
+            } finally {
+                document.getElementById('loading-state').classList.add('hidden');
+            }
+        }
+
+        function renderStationResults() {
+            const tbody = document.getElementById('stations-list');
+            tbody.innerHTML = '';
+            
+            searchResults.forEach((station, index) => {
+                const row = createStationRow(station, index);
+                tbody.appendChild(row);
+            });
+            
+            updateSelectedCount();
+        }
+
+        function createStationRow(station, index) {
+            const row = document.createElement('tr');
+            row.className = 'station-row';
+            row.id = `station-row-${index}`;
+            
+            // Check if this is a duplicate
+            const existingStation = duplicateStations.get(index);
+            const isDuplicate = !!existingStation;
+            
+            // Determine status
+            let statusClass = '';
+            let statusText = 'Ready to import';
+            let statusIcon = 'fa-download';
+            
+            if (isDuplicate) {
+                statusClass = 'status-exists';
+                statusText = `Exists (ID: ${existingStation.id})`;
+                statusIcon = 'fa-exclamation-triangle';
+            } else if (importedStations.has(station.stationuuid)) {
+                statusClass = 'status-imported';
+                statusText = 'Imported';
+                statusIcon = 'fa-check';
+            }
+            
+            row.innerHTML = `
+                <td class="px-6 py-4 text-center">
+                    <input type="checkbox" onchange="toggleStationSelection(${index})" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${selectedStationIds.has(index) ? 'checked' : ''}>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                        ${station.favicon ? 
+                            `<img src="${station.favicon}" alt="${station.name}" class="w-full h-full object-contain" onerror="this.style.display='none'">` :
+                            '<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fas fa-radio"></i></div>'
+                        }
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <div>
+                        <div class="font-medium text-gray-900">${escapeHtml(station.name)}</div>
+                        <div class="text-sm text-gray-600">${station.tags || 'No genre'}</div>
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="text-sm text-gray-900">${station.country || 'Unknown'}</div>
+                    ${station.state ? `<div class="text-sm text-gray-600">${station.state}</div>` : ''}
+                </td>
+                <td class="px-6 py-4">
+                    <div class="text-sm text-gray-900">${station.codec || 'Unknown'}</div>
+                    <div class="text-sm text-gray-600">${station.language || 'No language'}</div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="health-indicator ${station.lastcheckok === 1 ? 'health-green' : 'health-red'}" title="${station.lastcheckok === 1 ? 'Working' : 'May be broken'}"></span>
+                        <div>
+                            <div class="text-sm text-gray-900">${station.bitrate || 0} kbps</div>
+                            <div class="text-sm text-gray-600">${station.votes || 0} votes</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClass || 'bg-gray-100 text-gray-800'}">
+                        <i class="fas ${statusIcon} mr-1"></i>
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex space-x-2">
+                        ${isDuplicate ? 
+                            `<button onclick="viewExistingStation(${existingStation.id})" class="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors">
+                                <i class="fas fa-eye mr-1"></i>View Existing
+                            </button>` :
+                            `<button onclick="editAndImportStation(${index})" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
+                                <i class="fas fa-edit mr-1"></i>Edit & Save
+                            </button>
+                            <button onclick="importStationAsIs(${index})" class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
+                                <i class="fas fa-download mr-1"></i>Import As-Is
+                            </button>`
+                        }
+                    </div>
+                </td>
+            `;
+            
+            return row;
+        }
+
+        function toggleStationSelection(index) {
+            if (selectedStationIds.has(index)) {
+                selectedStationIds.delete(index);
+            } else {
+                selectedStationIds.add(index);
+            }
+            updateSelectedCount();
+            updateSelectAllCheckbox();
+        }
+
+        function toggleSelectAll() {
+            const checkbox = document.getElementById('select-all-checkbox');
+            if (checkbox.checked) {
+                selectAll();
+            } else {
+                selectNone();
+            }
+        }
+
+        function selectAll() {
+            selectedStationIds.clear();
+            searchResults.forEach((station, index) => {
+                if (!importedStations.has(station.stationuuid)) {
+                    selectedStationIds.add(index);
+                }
+            });
+            updateSelectedCount();
+            updateCheckboxes();
+        }
+
+        function selectNone() {
+            selectedStationIds.clear();
+            updateSelectedCount();
+            updateCheckboxes();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent = selectedStationIds.size;
+        }
+
+        function updateSelectAllCheckbox() {
+            const checkbox = document.getElementById('select-all-checkbox');
+            const availableStations = searchResults.filter((station, index) => !importedStations.has(station.stationuuid));
+            const selectedAvailable = availableStations.filter((station, origIndex) => {
+                const actualIndex = searchResults.indexOf(station);
+                return selectedStationIds.has(actualIndex);
+            });
+            
+            checkbox.checked = availableStations.length > 0 && selectedAvailable.length === availableStations.length;
+            checkbox.indeterminate = selectedAvailable.length > 0 && selectedAvailable.length < availableStations.length;
+        }
+
+        function updateCheckboxes() {
+            searchResults.forEach((station, index) => {
+                const checkbox = document.querySelector(`#station-row-${index} input[type="checkbox"]`);
+                if (checkbox) {
+                    checkbox.checked = selectedStationIds.has(index);
+                }
+            });
+            updateSelectAllCheckbox();
+        }
+
+        async function editAndImportStation(index) {
+            const station = searchResults[index];
+            if (!station) return;
+            
+            // Double-check for duplicates before importing
+            if (duplicateStations.has(index)) {
+                const existingStation = duplicateStations.get(index);
+                alert(`This station already exists in the database (ID: ${existingStation.id}). Use "View Existing" to see it.`);
+                return;
+            }
+            
+            try {
+                // Stage 1: Create minimal station record to get ID
+                console.log('🔄 Stage 1: Creating station record...');
+                const stationData = convertRadioBrowserStation(station);
+                
+                const response = await fetch('/stations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(stationData)
+                });
+                
+                if (response.ok) {
+                    const savedStation = await response.json();
+                    console.log(`✅ Stage 1 complete: Station created with ID ${savedStation.id}`);
+                    
+                    // Stage 2: Open editor with the saved station (now has ID)
+editStationForImport(savedStation);
+                    
+                    // Mark as imported in UI
+                    markStationAsImported(index, station.stationuuid);
+                } else if (response.status === 409) {
+                    // Duplicate detected - this shouldn't happen since we check duplicates first
+                    const error = await response.json();
+                    console.warn('⚠️ Duplicate detected during import:', error);
+                    alert(`Station already exists: ${error.existingStation?.name || 'Unknown'}`);
+                } else {
+                    throw new Error(`Failed to create station: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('❌ Error during import:', error);
+                alert('Failed to import station: ' + error.message);
+            }
+        }
+
+        function editStationForImport(stationData) {
+            // Debug: Log all elements with 'editor-' IDs
+            const allEditorElements = document.querySelectorAll('[id*="editor-"]');
+            console.log('🔍 All editor elements found:', allEditorElements.length);
+            allEditorElements.forEach(el => console.log(`  - ${el.id}`));
+            
+            // Verify modal elements are available
+            const modal = document.getElementById('station-editor-modal');
+            const stationIdElement = document.getElementById('editor-station-id');
+            
+            console.log('Modal found:', !!modal);
+            console.log('Station ID element found:', !!stationIdElement);
+            
+            if (!modal) {
+                console.error('❌ Station editor modal not found');
+                alert('Editor modal not available. Please refresh the page.');
+                return;
+            }
+            
+            if (!stationIdElement) {
+                console.error('❌ Station editor elements not found');
+                // Debug: Show what's actually in the modal
+                const modalContent = modal.innerHTML;
+                console.log('Modal HTML length:', modalContent.length);
+                console.log('Modal contains editor-station-id:', modalContent.includes('editor-station-id'));
+                alert('Editor elements not available. Check console for details.');
+                return;
+            }
+            
+            // Set the current editing station
+            currentEditingStation = stationData;
+            originalStationData = { ...stationData };
+            
+            // Populate the editor with the data
+            populateStationEditor(stationData);
+            
+            // Open the modal
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        async function importStationAsIs(index) {
+            const station = searchResults[index];
+            if (!station) return;
+            
+            try {
+                const stationData = convertRadioBrowserStation(station);
+                
+                const response = await fetch('/stations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(stationData)
+                });
+                
+                if (response.ok) {
+                    const savedStation = await response.json();
+                    markStationAsImported(index, station.stationuuid);
+                    showSuccess(`Successfully imported "${station.name}"`);
+                } else if (response.status === 409) {
+                    // Duplicate detected
+                    const error = await response.json();
+                    markStationAsExists(index, station.stationuuid);
+                    showError(`Station "${station.name}" already exists in database (ID: ${error.existingStation?.id})`);
+                } else {
+                    const error = await response.json();
+                    showError(`Failed to import "${station.name}": ${error.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showError(`Failed to import "${station.name}": ${error.message}`);
+            }
+        }
+
+        async function bulkImportSelected() {
+            if (selectedStationIds.size === 0) {
+                showError('No stations selected for import');
+                return;
+            }
+            
+            const confirmMessage = `Import ${selectedStationIds.size} selected stations as-is?`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            let imported = 0;
+            let failed = 0;
+            
+            for (const index of selectedStationIds) {
+                const station = searchResults[index];
+                if (!station || importedStations.has(station.stationuuid)) {
+                    continue;
+                }
+                
+                try {
+                    const stationData = convertRadioBrowserStation(station);
+                    
+                    const response = await fetch('/stations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(stationData)
+                    });
+                    
+                    if (response.ok) {
+                        markStationAsImported(index, station.stationuuid);
+                        imported++;
+                    } else if (response.status === 409) {
+                        // Duplicate detected
+                        markStationAsExists(index, station.stationuuid);
+                        console.log(`Duplicate detected: ${station.name}`);
+                        imported++; // Count as "processed"
+                    } else {
+                        failed++;
+                        console.error(`Failed to import ${station.name}`);
+                    }
+                } catch (error) {
+                    failed++;
+                    console.error(`Error importing ${station.name}:`, error);
+                }
+            }
+            
+            selectedStationIds.clear();
+            updateSelectedCount();
+            updateCheckboxes();
+            
+            showSuccess(`Bulk import complete: ${imported} imported, ${failed} failed`);
+        }
+
+        function convertRadioBrowserStation(rbStation) {
+            return {
+                name: rbStation.name || 'Unknown Station',
+                streamUrl: rbStation.url_resolved || rbStation.url || '',
+                homepage: rbStation.homepage || null,
+                favicon: rbStation.favicon || null,
+                country: rbStation.country || 'Unknown',
+                city: extractCityFromState(rbStation.state) || extractCityFromName(rbStation.name) || null,
+                state: rbStation.state || null,
+                language: rbStation.language || null,
+                genre: rbStation.tags || null,
+                type: 'music', // Default type
+                bitrate: rbStation.bitrate || null,
+                codec: rbStation.codec || null,
+                description: null,
+                frequency: null,
+                tags: rbStation.tags || null,
+                latitude: rbStation.geo_lat ? parseFloat(rbStation.geo_lat) : null,
+                longitude: rbStation.geo_long ? parseFloat(rbStation.geo_long) : null,
+                clickcount: rbStation.clickcount || null,
+                votes: rbStation.votes || null,
+                radioBrowserUuid: rbStation.stationuuid || null
+            };
+        }
+
+        function markStationAsImported(index, uuid) {
+            importedStations.add(uuid);
+            selectedStationIds.delete(index);
+            
+            // Update the row to show imported status
+            const row = document.getElementById(`station-row-${index}`);
+            if (row) {
+                const statusCell = row.cells[6]; // Status column
+                const actionsCell = row.cells[7]; // Actions column
+                
+                statusCell.innerHTML = `
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-imported">
+                        <i class="fas fa-check mr-1"></i>
+                        Imported
+                    </span>
+                `;
+                
+                // Disable action buttons
+                const buttons = actionsCell.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                // Uncheck and disable checkbox
+                const checkbox = row.cells[0].querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                }
+            }
+            
+            updateSelectedCount();
+            updateSelectAllCheckbox();
+        }
+
+        function markStationAsExists(index, uuid) {
+            importedStations.add(uuid); // Mark as processed to prevent re-selection
+            selectedStationIds.delete(index);
+            
+            // Update the row to show already exists status
+            const row = document.getElementById(`station-row-${index}`);
+            if (row) {
+                const statusCell = row.cells[6]; // Status column
+                const actionsCell = row.cells[7]; // Actions column
+                
+                statusCell.innerHTML = `
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-exists">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Already Exists
+                    </span>
+                `;
+                
+                // Disable action buttons
+                const buttons = actionsCell.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                // Uncheck and disable checkbox
+                const checkbox = row.cells[0].querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                }
+            }
+            
+            updateSelectedCount();
+            updateSelectAllCheckbox();
+        }
+
+        // Helper functions for city extraction (same logic as backend)
+        function extractCityFromState(state) {
+            if (!state) return null;
+            
+            const cleaned = state.trim();
+            if (cleaned.length > 2 && !/^[A-Z]{2}$/.test(cleaned)) {
+                if (cleaned.includes(',')) {
+                    const parts = cleaned.split(',').map(p => p.trim());
+                    return parts[0];
+                }
+                
+                const words = cleaned.split(/\s+/);
+                if (words.length >= 2) {
+                    const lastWord = words[words.length - 1];
+                    if (lastWord.length === 2 && lastWord === lastWord.toUpperCase()) {
+                        return words.slice(0, -1).join(' ');
+                    }
+                }
+                
+                return cleaned;
+            }
+            
+            return null;
+        }
+
+        function extractCityFromName(name) {
+            if (!name) return null;
+            
+            // Pattern 1: City in parentheses
+            const parenthesesMatch = name.match(/\(([^)]+)\)$/);
+            if (parenthesesMatch) {
+                const cityCandidate = parenthesesMatch[1].trim();
+                if (cityCandidate.length > 2) {
+                    return cityCandidate;
+                }
+            }
+            
+            // Pattern 2: City after dash/hyphen
+            const dashMatch = name.match(/[-–]\s*([A-Z][a-zA-Z\s]+)$/);
+            if (dashMatch) {
+                const cityCandidate = dashMatch[1].trim();
+                if (cityCandidate.length > 2 && !cityCandidate.includes('FM') && !cityCandidate.includes('AM')) {
+                    return cityCandidate;
+                }
+            }
+            
+            return null;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Add station manually function
+        async function addStationManually() {
+            try {
+                // Load modal if not already loaded
+                await loadStationEditorModal();
+                
+                // Create a blank station object for the modal
+                const blankStation = {
+                    id: 'NEW',
+                    name: '',
+                    country: '',
+                    city: '',
+                    genre: '',
+                    type: '',
+                    streamUrl: '',
+                    homepage: '',
+                    language: '',
+                    bitrate: '',
+                    codec: '',
+                    tags: '',
+                    latitude: '',
+                    longitude: '',
+                    description: '',
+                    facebookUrl: '',
+                    twitterUrl: '',
+                    instagramUrl: '',
+                    youtubeUrl: '',
+                    owner: '',
+                    establishedYear: '',
+                    email: '',
+                    phone: '',
+                    favicon: '',
+                    logo: '',
+                    local_image_url: '',
+                    address: ''
+                };
+                
+                // Set the station as current editing station
+                currentEditingStation = blankStation;
+                originalStationData = { ...blankStation };
+                
+                // Set manual mode flags
+                window.manualMode = true;
+                
+                // Populate the editor with blank data
+                populateStationEditor(blankStation);
+                
+                // Update header to show it's a new station
+                document.getElementById('editor-station-name').textContent = 'New Station';
+                document.getElementById('editor-station-id').textContent = 'NEW';
+                
+                // Show the modal
+                const modal = document.getElementById('station-editor-modal');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+                
+                console.log('📝 Manual station creation mode activated');
+                
+            } catch (error) {
+                console.error('❌ Error opening manual station creator:', error);
+                alert('Failed to open station creator. Please try again.');
+            }
+        }
+
+        // Import-specific save override is no longer needed
+        // The modal now handles saving properly through station-editor.js
+
+        // View existing station function
+        async function viewExistingStation(stationId) {
+            try {
+                console.log(`🔍 Viewing existing station ID: ${stationId}`);
+                
+                // Redirect to the edit stations page with the station ID
+                window.open(`/admin/stations/edit?id=${stationId}`, '_blank');
+            } catch (error) {
+                console.error('❌ Error viewing existing station:', error);
+                alert('Failed to view existing station');
+            }
+        }
+        // Load modal on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const response = await fetch('/components/station-editor-modal.html');
+                const html = await response.text();
+                document.getElementById('station-editor-container').innerHTML = html;
+            } catch (err) {
+                console.error('Failed to load modal:', err);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -6,6 +6,36 @@ import fetch from 'node-fetch';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Smart ID gap-filling utility function (shared with stations.ts)
+async function getNextAvailableStationId(): Promise<number> {
+  try {
+    // Get all existing station IDs in ascending order
+    const existingIds = await prisma.station.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' }
+    });
+    
+    // Find the first gap in the sequence
+    let expectedId = 1;
+    for (const station of existingIds) {
+      if (station.id !== expectedId) {
+        // Found a gap! Return the missing ID
+        console.log(`🔢 Found ID gap: using ID ${expectedId} instead of next sequential ID`);
+        return expectedId;
+      }
+      expectedId++;
+    }
+    
+    // No gaps found, return the next sequential ID
+    console.log(`🔢 No ID gaps found: using next sequential ID ${expectedId}`);
+    return expectedId;
+  } catch (error) {
+    console.error('❌ Error finding available station ID:', error);
+    // Fallback to letting Postgres handle auto-increment
+    throw error;
+  }
+}
+
 // HTML entity decoder function
 const decodeHtmlEntities = (text: string): string => {
   if (!text) return text;
@@ -168,9 +198,11 @@ router.post('/radio-browser', async (req: Request, res: Response) => {
         // Use languagecodes if available, fallback to language
         const stationLanguage = station.languagecodes || station.language || null;
         
-        // Create the station record
+        // Get optimal ID and create the station record
+        const optimalId = await getNextAvailableStationId();
         await prisma.station.create({
           data: {
+            id: optimalId,
             name: decodeHtmlEntities(station.name) || 'Unknown Station',
             streamUrl: station.url_resolved || station.url || '',
             homepage: station.homepage || null,
@@ -329,6 +361,7 @@ router.get('/preview', async (req: Request, res: Response) => {
   try {
     console.log('📊 Preview request query params:', req.query);
     const {
+      name = '',
       country = '',
       state = '',
       minVotes = '0',
@@ -346,6 +379,7 @@ router.get('/preview', async (req: Request, res: Response) => {
       reverse: 'true'
     });
 
+    if (name) params.append('name', name.toString());
     if (country) params.append('country', country.toString());
     if (state) params.append('state', state.toString());
     if (parseInt(minVotes.toString()) > 0) params.append('votes_min', minVotes.toString());
@@ -440,9 +474,11 @@ router.post('/stations', async (req: Request, res: Response) => {
         // Use languagecodes if available, fallback to language
         const stationLanguage = station.languagecodes || station.language || null;
         
-        // Create the station record
+        // Get optimal ID and create the station record
+        const optimalId = await getNextAvailableStationId();
         await prisma.station.create({
           data: {
+            id: optimalId,
             name: decodeHtmlEntities(station.name) || 'Unknown Station',
             streamUrl: station.url_resolved || station.url || '',
             homepage: station.homepage || null,

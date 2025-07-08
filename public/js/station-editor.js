@@ -6,13 +6,16 @@ let originalStationData = null;
 let currentNormalizationSuggestions = null;
 let currentScrapedData = null;
 
-function editStation(stationId) {
+async function editStation(stationId) {
     console.log('Opening station editor for station:', stationId);
     const station = stations.find(s => s.id === stationId);
     if (!station) {
         alert('Station not found');
         return;
     }
+    
+    // Ensure modal is loaded
+    await ensureModalLoaded();
     
     currentEditingStation = station;
     originalStationData = { ...station }; // Store original data for reset
@@ -223,30 +226,69 @@ async function saveStation() {
             }
         }
 
-        const response = await fetch(`/stations/${currentEditingStation.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        });
+        let response;
+        let successMessage;
+        
+        // Check if we're in manual mode (creating new station)
+        if (window.manualMode && currentEditingStation.id === 'NEW') {
+            // Create new station
+            response = await fetch('/stations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            successMessage = 'Station created successfully!';
+        } else {
+            // Update existing station
+            response = await fetch(`/stations/${currentEditingStation.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            successMessage = 'Station saved successfully!';
+        }
 
         if (response.ok) {
-            const updatedStation = await response.json();
+            const station = await response.json();
             
-            // Update the station in our local data
-            const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
-            if (stationIndex !== -1) {
-                stations[stationIndex] = updatedStation;
+            // Update the station in our local data (only if stations exists)
+            if (typeof stations !== 'undefined' && Array.isArray(stations)) {
+                if (window.manualMode && currentEditingStation.id === 'NEW') {
+                    // Add new station to the list
+                    stations.push(station);
+                } else {
+                    // Update existing station
+                    const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
+                    if (stationIndex !== -1) {
+                        stations[stationIndex] = station;
+                    }
+                }
+            }
+
+            // Update filtered stations (only if filteredStations exists)
+            if (typeof filteredStations !== 'undefined' && Array.isArray(filteredStations)) {
+                if (window.manualMode && currentEditingStation.id === 'NEW') {
+                    // Add new station to filtered list
+                    filteredStations.push(station);
+                } else {
+                    // Update existing station
+                    const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
+                    if (filteredIndex !== -1) {
+                        filteredStations[filteredIndex] = station;
+                    }
+                }
             }
             
-            // Update filtered stations
-            const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
-            if (filteredIndex !== -1) {
-                filteredStations[filteredIndex] = updatedStation;
+            // Reset manual mode
+            if (window.manualMode) {
+                window.manualMode = false;
             }
             
-            showSuccess('Station saved successfully!');
+            showSuccess(successMessage);
             closeStationEditor();
             renderStations(); // Re-render to show updated data
         } else {
@@ -961,4 +1003,24 @@ function enableAutoSave() {
             }, 1000);
         });
     });
+}
+
+function closeStationEditor() {
+    // Reset manual mode if it was set
+    if (window.manualMode) {
+        window.manualMode = false;
+    }
+    
+    // Clear current editing station
+    currentEditingStation = null;
+    originalStationData = null;
+    
+    // Hide the modal
+    const modal = document.getElementById('station-editor-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+    
+    console.log('📝 Station editor closed');
 }

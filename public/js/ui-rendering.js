@@ -7,6 +7,18 @@ function renderStations() {
     const empty = document.getElementById('empty-state');
     const pagination = document.getElementById('pagination');
 
+    // Check if we're on a page that has the stations list (edit page)
+    if (!container || !loading || !empty || !pagination) {
+        console.log('📝 renderStations called on page without stations list - no action needed');
+        return;
+    }
+
+    // Check if filteredStations exists (should exist on edit page)
+    if (typeof filteredStations === 'undefined') {
+        console.log('📝 No filteredStations available - skipping render');
+        return;
+    }
+
     loading.style.display = 'none';
 
     if (filteredStations.length === 0) {
