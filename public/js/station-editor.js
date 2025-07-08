@@ -411,7 +411,14 @@ async function autoScrapeData() {
         // Merge the data
         const mergedData = mergeScrapedData(primaryData, secondaryData);
         console.log('Merged data result:', mergedData);
-        displayScrapedData(mergedData);
+        
+        // Check if scraping was successful
+        if (!mergedData || !mergedData.success) {
+            console.log('Scraping failed for both URLs');
+            displayScrapedData(null);
+        } else {
+            displayScrapedData(mergedData);
+        }
         
         // Restore button state
         button.innerHTML = originalText;
@@ -432,10 +439,10 @@ async function autoScrapeData() {
 function mergeScrapedData(primaryResult, secondaryResult) {
     // If only one result is successful, return it
     if (!primaryResult || !primaryResult.success) {
-        return secondaryResult;
+        return secondaryResult || { success: false, data: {}, source: 'Unknown' };
     }
     if (!secondaryResult || !secondaryResult.success) {
-        return primaryResult;
+        return primaryResult || { success: false, data: {}, source: 'Unknown' };
     }
     
     // Both results are successful, check for conflicts
@@ -539,6 +546,18 @@ function displayScrapedData(responseData) {
     
     console.log('Preview element:', preview);
     console.log('Content element:', content);
+    
+    // Handle null or undefined responseData
+    if (!responseData) {
+        console.log('No response data available');
+        if (content) {
+            content.innerHTML = '<div class="text-center py-8 text-gray-500">No data could be scraped from the website.</div>';
+        }
+        if (preview) {
+            preview.classList.remove('hidden');
+        }
+        return;
+    }
     
     // Check if there are conflicts that need resolution
     if (responseData.hasConflicts) {
