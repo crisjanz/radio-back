@@ -427,8 +427,11 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Use the existing scraping endpoint
-    const response = await fetch('http://localhost:3001/scrape/business', {
+    // Use the existing scraping endpoint - construct URL from current request
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const baseUrl = `${protocol}://${host}`;
+    const response = await fetch(`${baseUrl}/scrape/business`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

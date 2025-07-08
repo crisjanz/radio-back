@@ -263,7 +263,11 @@ router.post('/quick-start', async (req: Request, res: Response) => {
 
     for (const countrycode of countries) {
       try {
-        const importResponse = await fetch('http://localhost:3001/import/radio-browser', {
+        // Construct URL from current request
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const baseUrl = `${protocol}://${host}`;
+        const importResponse = await fetch(`${baseUrl}/import/radio-browser`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
