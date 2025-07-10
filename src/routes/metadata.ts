@@ -104,22 +104,25 @@ router.get('/:stationId', async (req: Request, res: Response) => {
         if (localResponse.ok) {
           const localData = await localResponse.json();
           
-          if (localData.success && localData.song) {
-            console.log(`✅ Local server provided metadata: ${localData.song}`);
+          // Handle your local server's response format
+          if (localData.song || (localData.title && localData.artist)) {
+            const songInfo = localData.song || `${localData.artist} - ${localData.title}`;
+            console.log(`✅ Local server provided metadata: ${songInfo}`);
             
             // Parse artist and title if available
-            const parsed = parseTrackTitle(localData.song);
+            const parsed = parseTrackTitle(songInfo);
             
             return res.json({
               success: true,
-              song: localData.song,
-              title: parsed.title || localData.song,
-              artist: parsed.artist,
+              song: songInfo,
+              title: localData.title || parsed.title || songInfo,
+              artist: localData.artist || parsed.artist,
               source: 'local',
               message: localData.message || 'Enhanced metadata from local server',
               // Pass through any additional local server fields
               ...(localData.artwork && { artwork: localData.artwork }),
-              ...(localData.album && { album: localData.album })
+              ...(localData.album && { album: localData.album }),
+              ...(localData.rogersData && { rogersData: localData.rogersData })
             });
           } else {
             console.log(`⚠️ Local server returned no metadata, falling back to Icecast`);
