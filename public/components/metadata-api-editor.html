@@ -1,0 +1,161 @@
+<!-- Metadata API Configuration Modal -->
+<div id="metadata-api-editor-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-6 border-b border-gray-200">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">Metadata API Configuration</h2>
+                <p class="text-sm text-gray-600" id="metadata-editor-station-name">Configure metadata source for station</p>
+            </div>
+            <button onclick="closeMetadataApiEditor()" class="text-gray-400 hover:text-gray-600 text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6">
+            <div class="space-y-6">
+                <!-- API Configuration -->
+                <div class="bg-cyan-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <i class="fas fa-music text-cyan-600 mr-2"></i>
+                        Metadata API Configuration
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Metadata API URL</label>
+                            <input type="url" id="metadata-api-url" placeholder="https://api.example.com/nowplaying" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                            <div class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Leave empty to use Icecast stream metadata detection
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Metadata Type</label>
+                                <select id="metadata-api-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                    <option value="">Select type...</option>
+                                    <option value="custom-api">Custom API</option>
+                                    <option value="icecast-json">Icecast JSON</option>
+                                    <option value="icecast-xml">Icecast XML</option>
+                                    <option value="shoutcast">Shoutcast</option>
+                                    <option value="socast">SoCast</option>
+                                    <option value="rogers-auto">Rogers Auto (JSON Mapping)</option>
+                                    <option value="radio-co">Radio.co</option>
+                                    <option value="laut-fm">Laut.fm</option>
+                                    <option value="website-scrape">Website Scraping</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Response Format</label>
+                                <select id="metadata-response-format" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                    <option value="">Auto-detect</option>
+                                    <option value="json">JSON</option>
+                                    <option value="xml">XML</option>
+                                    <option value="html">HTML</option>
+                                    <option value="jsonp">JSONP</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Custom Field Mapping (JSON)</label>
+                            <textarea id="metadata-field-mapping" rows="4" placeholder='{"title": "song.name", "artist": "artist.name", "album": "album.title"}' class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-mono text-sm"></textarea>
+                            <div class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Define how to extract metadata fields from the API response
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testing Tools -->
+                <div class="bg-blue-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <i class="fas fa-flask text-blue-600 mr-2"></i>
+                        Testing & Discovery
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex space-x-2">
+                            <button onclick="testMetadataApiUrl()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                <i class="fas fa-play mr-2"></i>Test API URL
+                            </button>
+                            <button onclick="discoverMetadataApiUrls()" class="px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+                                <i class="fas fa-search mr-2"></i>Auto-Discover
+                            </button>
+                            <button onclick="openMetadataDiscoveryTool()" class="px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+                                <i class="fas fa-external-link-alt mr-2"></i>Discovery Tool
+                            </button>
+                        </div>
+                        <div id="metadata-api-test-results" class="hidden">
+                            <div class="text-sm font-medium text-gray-700 mb-2">Test Results:</div>
+                            <div id="metadata-api-test-content" class="bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
+                                <div class="text-sm text-gray-600">No test results yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discovered URLs -->
+                <div id="discovered-urls-section" class="bg-green-50 rounded-xl p-6 hidden">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <i class="fas fa-list text-green-600 mr-2"></i>
+                        Discovered Metadata URLs
+                    </h3>
+                    <div id="discovered-urls-list" class="space-y-2">
+                        <!-- Discovered URLs will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Quick Setup Templates -->
+                <div class="bg-gray-50 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <i class="fas fa-magic text-gray-600 mr-2"></i>
+                        Quick Setup Templates
+                    </h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <button onclick="applyTemplate('socast')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">SoCast</div>
+                            <div class="text-xs text-gray-500">JSONP format</div>
+                        </button>
+                        <button onclick="applyTemplate('rogers')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">Rogers Auto</div>
+                            <div class="text-xs text-gray-500">Auto-mapping</div>
+                        </button>
+                        <button onclick="applyTemplate('radio-co')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">Radio.co</div>
+                            <div class="text-xs text-gray-500">JSON API</div>
+                        </button>
+                        <button onclick="applyTemplate('icecast-json')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">Icecast JSON</div>
+                            <div class="text-xs text-gray-500">status-json.xsl</div>
+                        </button>
+                        <button onclick="applyTemplate('icecast-xml')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">Icecast XML</div>
+                            <div class="text-xs text-gray-500">status.xml</div>
+                        </button>
+                        <button onclick="applyTemplate('custom')" class="p-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                            <div class="font-medium text-sm">Custom API</div>
+                            <div class="text-xs text-gray-500">Generic JSON</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+            <div class="text-sm text-gray-500">
+                <i class="fas fa-info-circle mr-1"></i>
+                Changes are automatically saved when you close this dialog
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="resetMetadataApiConfig()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i class="fas fa-undo mr-2"></i>Reset
+                </button>
+                <button onclick="saveAndCloseMetadataApiEditor()" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors">
+                    <i class="fas fa-save mr-2"></i>Save & Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

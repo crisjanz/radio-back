@@ -1,0 +1,1839 @@
+// Station Editor Module
+// Handles station editing modal, form validation, saving, and data management
+
+let currentEditingStation = null;
+let originalStationData = null;
+let currentNormalizationSuggestions = null;
+let currentScrapedData = null;
+
+// Multi-select genre system variables
+let currentGenres = [];
+let currentSubgenres = [];
+let currentTypes = [];
+let genreConstants = null;
+let stationTypeConstants = null;
+let collectionTagConstants = null;
+
+async function editStation(stationId) {
+    console.log('Opening station editor for station:', stationId);
+    const station = stations.find(s => s.id === stationId);
+    if (!station) {
+        alert('Station not found');
+        return;
+    }
+    
+    // Ensure modal is loaded
+    await ensureModalLoaded();
+    
+    // Load genre constants
+    await loadGenreConstants();
+    
+    currentEditingStation = station;
+    originalStationData = { ...station }; // Store original data for reset
+    populateStationEditor(station);
+    const modal = document.getElementById('station-editor-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function populateStationEditor(station) {
+    // Update header
+    document.getElementById('editor-station-name').textContent = station.name || 'Unnamed Station';
+    document.getElementById('editor-station-id').textContent = station.id;
+
+    // Basic Info
+    document.getElementById('edit-name').value = station.name || '';
+    document.getElementById('edit-country').value = station.country || '';
+    document.getElementById('edit-city').value = station.city || '';
+    document.getElementById('edit-stream-url').value = station.streamUrl || '';
+    document.getElementById('edit-homepage').value = station.homepage || '';
+    document.getElementById('edit-language').value = station.language || '';
+    document.getElementById('edit-bitrate').value = station.bitrate || '';
+    document.getElementById('edit-codec').value = station.codec || '';
+
+    // Initialize multi-select genre system
+    currentGenres = parseCommaSeparatedValues(station.genre);
+    currentSubgenres = parseCommaSeparatedValues(station.subgenre);
+    currentTypes = parseCommaSeparatedValues(station.type);
+    
+    // Populate dropdowns
+    populateGenreDropdown();
+    populateSubgenreDropdown();
+    populateTypeDropdown();
+    
+    // Display current values
+    renderTagsForField('genres', currentGenres);
+    renderTagsForField('subgenres', currentSubgenres);
+    renderTagsForField('types', currentTypes);
+
+    // Location & Tags
+    document.getElementById('edit-tags').value = station.tags || '';
+    document.getElementById('edit-latitude').value = station.latitude || '';
+    document.getElementById('edit-longitude').value = station.longitude || '';
+
+    // Advanced Fields
+    document.getElementById('edit-description').value = station.description || '';
+    document.getElementById('edit-facebook').value = station.facebookUrl || '';
+    document.getElementById('edit-twitter').value = station.twitterUrl || '';
+    document.getElementById('edit-instagram').value = station.instagramUrl || '';
+    document.getElementById('edit-youtube').value = station.youtubeUrl || '';
+    document.getElementById('edit-owner').value = station.owner || '';
+    document.getElementById('edit-established').value = station.establishedYear || '';
+    document.getElementById('edit-email').value = station.email || '';
+    document.getElementById('edit-phone').value = station.phone || '';
+    document.getElementById('edit-favicon').value = station.favicon || '';
+    document.getElementById('edit-logo').value = station.logo || '';
+    document.getElementById('edit-local-image').value = station.local_image_url || '';
+    document.getElementById('edit-address').value = station.address || '';
+
+    // Metadata Configuration
+    document.getElementById('edit-metadata-url').value = station.metadataApiUrl || '';
+    document.getElementById('edit-metadata-type').value = station.metadataApiType || '';
+    document.getElementById('edit-metadata-format').value = station.metadataFormat || '';
+    document.getElementById('edit-metadata-fields').value = station.metadataFields || '';
+
+    // Quality & Curation
+    document.getElementById('edit-quality-score').value = station.qualityScore || '';
+    document.getElementById('edit-editors-pick').checked = station.editorsPick || false;
+    document.getElementById('edit-featured').checked = station.featured || false;
+    document.getElementById('edit-is-active').checked = station.isActive !== false; // Default to true
+
+    // Clear and reset scraper tools for new station
+    document.getElementById('scraper-url').value = '';
+    const normalizationSuggestions = document.getElementById('normalization-suggestions');
+    if (normalizationSuggestions) {
+        normalizationSuggestions.classList.add('hidden');
+    }
+    const scrapedDataPreview = document.getElementById('scraped-data-preview');
+    if (scrapedDataPreview) {
+        scrapedDataPreview.style.display = 'none';
+    }
+    
+    // Reset scraper button
+    const scraperButton = document.querySelector('button[onclick="autoScrapeData()"]');
+    if (scraperButton) {
+        scraperButton.innerHTML = '<i class="fas fa-globe mr-1"></i>Auto-Scrape';
+        scraperButton.disabled = false;
+    }
+    
+    // Clear scraped data
+    currentScrapedData = null;
+
+    // Load current image
+    loadStationImage(station);
+    
+    // Update preview to match current download source selection
+    setTimeout(() => {
+        if (typeof updateImagePreview === 'function') {
+            updateImagePreview();
+        }
+    }, 100);
+
+    // Load stream health
+    loadStreamHealth(station);
+    
+    // Load metadata configuration
+    loadMetadataConfig(station);
+
+    // Check for normalization suggestions
+    checkNormalizationSuggestions(station);
+    
+    // Clear any previous Google search results
+    clearGoogleBusinessResults();
+}
+
+// Load genre constants from API
+async function loadGenreConstants() {
+    try {
+        const [genreResponse, typeResponse, tagResponse] = await Promise.all([
+            fetch('/admin/constants/genres'),
+            fetch('/admin/constants/station-types'),
+            fetch('/admin/constants/collection-tags')
+        ]);
+        
+        if (genreResponse.ok && typeResponse.ok && tagResponse.ok) {
+            genreConstants = await genreResponse.json();
+            stationTypeConstants = await typeResponse.json();
+            collectionTagConstants = await tagResponse.json();
+        } else {
+            throw new Error('Failed to load classification constants');
+        }
+    } catch (error) {
+        console.error('Error loading classification constants:', error);
+        // Fallback to basic values
+        genreConstants = { allGenres: ['music', 'news', 'talk', 'sports'] };
+        stationTypeConstants = { allTypes: ['music', 'news', 'talk', 'sports'] };
+        collectionTagConstants = { allTags: [] };
+    }
+}
+
+// Multi-select utility functions
+function parseCommaSeparatedValues(str) {
+    if (!str || str.trim() === '') return [];
+    return str.split(',').map(item => item.trim()).filter(item => item.length > 0);
+}
+
+function renderTagsForField(fieldName, values) {
+    const container = document.getElementById(`current-${fieldName}`);
+    if (!container) {
+        console.error(`Container not found: current-${fieldName}`);
+        return;
+    }
+    
+    // Map fieldName to correct placeholder class
+    const placeholderClass = fieldName === 'genres' ? 'genre-placeholder' : 
+                             fieldName === 'subgenres' ? 'subgenre-placeholder' :
+                             fieldName === 'types' ? 'type-placeholder' : `${fieldName}-placeholder`;
+    
+    const placeholder = container.querySelector(`.${placeholderClass}`);
+    
+    // Clear existing tags (keep placeholder)
+    const existingTags = container.querySelectorAll('.tag-item');
+    existingTags.forEach(tag => tag.remove());
+    
+    if (values.length === 0) {
+        if (placeholder) placeholder.style.display = 'block';
+    } else {
+        if (placeholder) placeholder.style.display = 'none';
+        
+        values.forEach((value, index) => {
+            const tag = document.createElement('span');
+            tag.className = 'tag-item';
+            tag.innerHTML = `
+                <span>${value}</span>
+                <span class="tag-remove" onclick="remove${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}(${index})">
+                    <i class="fas fa-times"></i>
+                </span>
+            `;
+            container.appendChild(tag);
+        });
+    }
+}
+
+// Populate dropdowns with available options
+function populateGenreDropdown() {
+    const genreSelect = document.getElementById('add-genre-select');
+    if (!genreSelect || !genreConstants) return;
+    
+    // Clear existing options except the first one
+    genreSelect.innerHTML = '<option value="">Add Genre...</option>';
+    
+    // Add predefined genres
+    genreConstants.allGenres.forEach(genre => {
+        const option = document.createElement('option');
+        option.value = genre;
+        option.textContent = genreConstants.genres[genre]?.name || genre.charAt(0).toUpperCase() + genre.slice(1);
+        genreSelect.appendChild(option);
+    });
+    
+    // Add event listener for adding genres
+    genreSelect.addEventListener('change', function() {
+        if (this.value) {
+            addGenre(this.value);
+            this.value = ''; // Reset dropdown
+        }
+    });
+}
+
+function populateSubgenreDropdown() {
+    const subgenreSelect = document.getElementById('add-subgenre-select');
+    if (!subgenreSelect || !genreConstants) return;
+    
+    // Clear existing options
+    subgenreSelect.innerHTML = '<option value="">Add Subgenre...</option>';
+    
+    // Get all subgenres from all genres (or filter by current genres if needed)
+    const allSubgenres = new Set();
+    genreConstants.allGenres.forEach(genre => {
+        const genreInfo = genreConstants.genres[genre];
+        if (genreInfo && genreInfo.subgenres) {
+            genreInfo.subgenres.forEach(subgenre => allSubgenres.add(subgenre));
+        }
+    });
+    
+    // Add to dropdown
+    Array.from(allSubgenres).sort().forEach(subgenre => {
+        const option = document.createElement('option');
+        option.value = subgenre;
+        option.textContent = subgenre.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        subgenreSelect.appendChild(option);
+    });
+    
+    // Add event listener
+    subgenreSelect.addEventListener('change', function() {
+        if (this.value) {
+            addSubgenre(this.value);
+            this.value = ''; // Reset dropdown
+        }
+    });
+}
+
+function populateTypeDropdown() {
+    const typeSelect = document.getElementById('add-type-select');
+    if (!typeSelect || !stationTypeConstants) return;
+    
+    // Clear existing options except the first one
+    typeSelect.innerHTML = '<option value="">Add Type...</option>';
+    
+    // Add predefined types
+    stationTypeConstants.allTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = stationTypeConstants.stationTypes[type]?.name || type.charAt(0).toUpperCase() + type.slice(1);
+        typeSelect.appendChild(option);
+    });
+    
+    // Add event listener
+    typeSelect.addEventListener('change', function() {
+        if (this.value) {
+            addType(this.value);
+            this.value = ''; // Reset dropdown
+        }
+    });
+}
+
+// Add/Remove functions for multi-select
+function addGenre(value) {
+    if (!value || currentGenres.includes(value)) return;
+    currentGenres.push(value);
+    renderTagsForField('genres', currentGenres);
+}
+
+function addSubgenre(value) {
+    if (!value || currentSubgenres.includes(value)) return;
+    currentSubgenres.push(value);
+    renderTagsForField('subgenres', currentSubgenres);
+}
+
+function addType(value) {
+    if (!value || currentTypes.includes(value)) return;
+    currentTypes.push(value);
+    renderTagsForField('types', currentTypes);
+}
+
+function removeGenres(index) {
+    currentGenres.splice(index, 1);
+    renderTagsForField('genres', currentGenres);
+}
+
+function removeSubgenres(index) {
+    currentSubgenres.splice(index, 1);
+    renderTagsForField('subgenres', currentSubgenres);
+}
+
+function removeTypes(index) {
+    currentTypes.splice(index, 1);
+    renderTagsForField('types', currentTypes);
+}
+
+function loadStreamHealth(station) {
+    const statusElement = document.getElementById('stream-status');
+    const lastCheckElement = document.getElementById('last-check');
+    
+    if (station.lastPingSuccess === true) {
+        statusElement.innerHTML = '<span class="health-indicator health-green mr-2"></span><span class="text-sm text-green-600">Healthy</span>';
+    } else if (station.lastPingSuccess === false) {
+        statusElement.innerHTML = '<span class="health-indicator health-red mr-2"></span><span class="text-sm text-red-600">Offline</span>';
+    } else {
+        statusElement.innerHTML = '<span class="health-indicator health-gray mr-2"></span><span class="text-sm text-gray-600">Unknown</span>';
+    }
+    
+    if (station.lastPingCheck) {
+        const lastCheck = new Date(station.lastPingCheck);
+        const now = new Date();
+        const diffHours = Math.floor((now - lastCheck) / (1000 * 60 * 60));
+        lastCheckElement.textContent = diffHours > 0 ? `${diffHours} hours ago` : 'Recently';
+    } else {
+        lastCheckElement.textContent = 'Never';
+    }
+}
+
+async function checkNormalizationSuggestions(station) {
+    const suggestionsContainer = document.getElementById('normalization-suggestions');
+    const genreSuggestion = document.getElementById('genre-suggestion');
+    const typeSuggestion = document.getElementById('type-suggestion');
+    
+    try {
+        // Call the normalizer API to get suggestions
+        const response = await fetch('/admin/normalize-preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                genre: station.genre,
+                type: station.type,
+                name: station.name
+            })
+        });
+        
+        if (response.ok) {
+            const suggestions = await response.json();
+            currentNormalizationSuggestions = suggestions;
+            
+            let hasSuggestions = false;
+            
+            // Show genre suggestion if different
+            if (suggestions.genre && suggestions.genre !== station.genre) {
+                genreSuggestion.innerHTML = `<span class="text-gray-600">Genre:</span> <span class="text-purple-600">${station.genre || 'empty'} → ${suggestions.genre}</span>`;
+                hasSuggestions = true;
+            } else {
+                genreSuggestion.innerHTML = '';
+            }
+            
+            // Show type suggestion if different
+            if (suggestions.type && suggestions.type !== station.type) {
+                typeSuggestion.innerHTML = `<span class="text-gray-600">Type:</span> <span class="text-purple-600">${station.type || 'empty'} → ${suggestions.type}</span>`;
+                hasSuggestions = true;
+            } else {
+                typeSuggestion.innerHTML = '';
+            }
+            
+            // Show or hide suggestions container
+            if (hasSuggestions) {
+                suggestionsContainer.classList.remove('hidden');
+            } else {
+                suggestionsContainer.classList.add('hidden');
+            }
+        }
+    } catch (error) {
+        console.error('Error checking normalization suggestions:', error);
+    }
+}
+
+function applyNormalizationSuggestions() {
+    if (!currentNormalizationSuggestions) return;
+    
+    if (currentNormalizationSuggestions.genre) {
+        genreManager.addGenre(currentNormalizationSuggestions.genre);
+    }
+    
+    if (currentNormalizationSuggestions.type) {
+        genreManager.addType(currentNormalizationSuggestions.type);
+    }
+    
+    // Hide suggestions after applying
+    document.getElementById('normalization-suggestions').classList.add('hidden');
+    showSuccess('Normalization suggestions applied!');
+}
+
+// Custom input functions for genre system
+function showCustomGenreInput() {
+    const customInput = document.getElementById('custom-genre-input');
+    const customGenreField = document.getElementById('custom-genre');
+    customInput.classList.remove('hidden');
+    customGenreField.focus();
+}
+
+function cancelCustomGenre() {
+    const customInput = document.getElementById('custom-genre-input');
+    const customGenreField = document.getElementById('custom-genre');
+    customInput.classList.add('hidden');
+    customGenreField.value = '';
+}
+
+function addCustomGenre() {
+    const customGenreField = document.getElementById('custom-genre');
+    const genre = customGenreField.value.trim();
+    
+    if (genre && typeof genreManager !== 'undefined') {
+        genreManager.addGenre(genre);
+        cancelCustomGenre();
+    }
+}
+
+function showCustomSubgenreInput() {
+    const customInput = document.getElementById('custom-subgenre-input');
+    const customSubgenreField = document.getElementById('custom-subgenre');
+    customInput.classList.remove('hidden');
+    customSubgenreField.focus();
+}
+
+function cancelCustomSubgenre() {
+    const customInput = document.getElementById('custom-subgenre-input');
+    const customSubgenreField = document.getElementById('custom-subgenre');
+    customInput.classList.add('hidden');
+    customSubgenreField.value = '';
+}
+
+function addCustomSubgenre() {
+    const customSubgenreField = document.getElementById('custom-subgenre');
+    const subgenre = customSubgenreField.value.trim();
+    
+    if (subgenre && typeof genreManager !== 'undefined') {
+        genreManager.addSubgenre(subgenre);
+        cancelCustomSubgenre();
+    }
+}
+
+function showCustomTypeInput() {
+    const customInput = document.getElementById('custom-type-input');
+    const customTypeField = document.getElementById('custom-type');
+    customInput.classList.remove('hidden');
+    customTypeField.focus();
+}
+
+function cancelCustomType() {
+    const customInput = document.getElementById('custom-type-input');
+    const customTypeField = document.getElementById('custom-type');
+    customInput.classList.add('hidden');
+    customTypeField.value = '';
+}
+
+function addCustomType() {
+    const customTypeField = document.getElementById('custom-type');
+    const type = customTypeField.value.trim();
+    
+    if (type && typeof genreManager !== 'undefined') {
+        genreManager.addType(type);
+        cancelCustomType();
+    }
+}
+
+async function saveStation() {
+    try {
+        console.log('Saving station...');
+        const formData = collectStationFormData();
+        
+        // Validate required fields
+        if (!formData.name.trim()) {
+            showError('Station name is required');
+            return;
+        }
+        
+        if (!formData.streamUrl.trim()) {
+            showError('Stream URL is required');
+            return;
+        }
+        
+        // Validate URLs
+        try {
+            new URL(formData.streamUrl);
+        } catch (e) {
+            showError('Stream URL must be a valid URL');
+            return;
+        }
+        
+        if (formData.homepage && formData.homepage.trim()) {
+            try {
+                new URL(formData.homepage);
+            } catch (e) {
+                showError('Homepage URL must be a valid URL');
+                return;
+            }
+        }
+
+        let response;
+        let successMessage;
+        
+        // Check if we're in manual mode (creating new station)
+        if (window.manualMode && currentEditingStation.id === 'NEW') {
+            // Create new station
+            response = await fetch('/stations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            successMessage = 'Station created successfully!';
+        } else {
+            // Update existing station
+            response = await fetch(`/stations/${currentEditingStation.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            successMessage = 'Station saved successfully!';
+        }
+
+        if (response.ok) {
+            const station = await response.json();
+            
+            // Update the station in our local data (only if stations exists)
+            if (typeof stations !== 'undefined' && Array.isArray(stations)) {
+                if (window.manualMode && currentEditingStation.id === 'NEW') {
+                    // Add new station to the list
+                    stations.push(station);
+                } else {
+                    // Update existing station
+                    const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
+                    if (stationIndex !== -1) {
+                        stations[stationIndex] = station;
+                    }
+                }
+            }
+
+            // Update filtered stations (only if filteredStations exists)
+            if (typeof filteredStations !== 'undefined' && Array.isArray(filteredStations)) {
+                if (window.manualMode && currentEditingStation.id === 'NEW') {
+                    // Add new station to filtered list
+                    filteredStations.push(station);
+                } else {
+                    // Update existing station
+                    const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
+                    if (filteredIndex !== -1) {
+                        filteredStations[filteredIndex] = station;
+                    }
+                }
+            }
+            
+            // Reset manual mode
+            if (window.manualMode) {
+                window.manualMode = false;
+            }
+            
+            showSuccess(successMessage);
+            closeStationEditor();
+            renderStations(); // Re-render to show updated data
+        } else {
+            const error = await response.json();
+            showError(`Failed to save station: ${error.error || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Error saving station:', error);
+        showError('Error saving station');
+    }
+}
+
+function collectStationFormData() {
+    return {
+        name: document.getElementById('edit-name').value.trim(),
+        country: document.getElementById('edit-country').value.trim(),
+        city: document.getElementById('edit-city').value.trim(),
+        genre: document.getElementById('edit-genre').value.trim(),
+        type: document.getElementById('edit-type').value.trim(),
+        streamUrl: document.getElementById('edit-stream-url').value.trim(),
+        homepage: document.getElementById('edit-homepage').value.trim(),
+        language: document.getElementById('edit-language').value.trim(),
+        bitrate: document.getElementById('edit-bitrate').value ? parseInt(document.getElementById('edit-bitrate').value) : null,
+        codec: document.getElementById('edit-codec').value.trim(),
+        tags: document.getElementById('edit-tags').value.trim(),
+        latitude: document.getElementById('edit-latitude').value ? parseFloat(document.getElementById('edit-latitude').value) : null,
+        longitude: document.getElementById('edit-longitude').value ? parseFloat(document.getElementById('edit-longitude').value) : null,
+        // Metadata configuration
+        metadataApiUrl: document.getElementById('edit-metadata-url').value.trim() || null,
+        metadataApiType: document.getElementById('edit-metadata-type').value.trim() || null,
+        metadataFormat: document.getElementById('edit-metadata-format').value.trim() || null,
+        metadataFields: document.getElementById('edit-metadata-fields').value.trim() || null,
+        description: document.getElementById('edit-description').value.trim(),
+        facebookUrl: document.getElementById('edit-facebook').value.trim(),
+        twitterUrl: document.getElementById('edit-twitter').value.trim(),
+        instagramUrl: document.getElementById('edit-instagram').value.trim(),
+        youtubeUrl: document.getElementById('edit-youtube').value.trim(),
+        owner: document.getElementById('edit-owner').value.trim(),
+        establishedYear: document.getElementById('edit-established').value ? parseInt(document.getElementById('edit-established').value) : null,
+        email: document.getElementById('edit-email').value.trim(),
+        phone: document.getElementById('edit-phone').value.trim(),
+        favicon: document.getElementById('edit-favicon').value.trim(),
+        logo: document.getElementById('edit-logo').value.trim(),
+        local_image_url: document.getElementById('edit-local-image').value.trim(),
+        address: document.getElementById('edit-address').value.trim()
+    };
+}
+
+// Scraper Functions
+async function autoScrapeData() {
+    let primaryUrl = document.getElementById('scraper-url').value.trim();
+    let secondaryUrl = null;
+    
+    // Determine primary and secondary URLs
+    if (primaryUrl) {
+        // If URL is provided, check if we should also use homepage as secondary
+        if (currentEditingStation && currentEditingStation.homepage && 
+            currentEditingStation.homepage !== primaryUrl) {
+            secondaryUrl = currentEditingStation.homepage;
+        }
+    } else {
+        // If no URL provided, use homepage as primary
+        if (currentEditingStation && currentEditingStation.homepage) {
+            primaryUrl = currentEditingStation.homepage;
+            document.getElementById('scraper-url').value = primaryUrl;
+        }
+    }
+    
+    if (!primaryUrl) {
+        alert('Please enter a URL to scrape or ensure the station has a homepage URL');
+        return;
+    }
+    
+    // Validate URLs
+    try {
+        new URL(primaryUrl);
+        if (secondaryUrl) new URL(secondaryUrl);
+    } catch (e) {
+        alert('Please enter valid URLs (include http:// or https://)');
+        return;
+    }
+    
+    try {
+        console.log('Scraping primary URL:', primaryUrl);
+        if (secondaryUrl) console.log('Scraping secondary URL:', secondaryUrl);
+        
+        // Show loading state
+        const button = event?.target || document.querySelector('button[onclick="autoScrapeData()"]');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Scraping...';
+        button.disabled = true;
+        
+        // Scrape primary URL
+        const primaryResponse = await fetch('/admin/scrape-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url: primaryUrl })
+        });
+        
+        let primaryData = null;
+        if (primaryResponse.ok) {
+            primaryData = await primaryResponse.json();
+            console.log('Primary scrape result:', primaryData);
+        }
+        
+        // Scrape secondary URL if provided
+        let secondaryData = null;
+        if (secondaryUrl) {
+            const secondaryResponse = await fetch('/admin/scrape-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: secondaryUrl })
+            });
+            
+            if (secondaryResponse.ok) {
+                secondaryData = await secondaryResponse.json();
+                console.log('Secondary scrape result:', secondaryData);
+            }
+        }
+        
+        // Merge the data
+        const mergedData = mergeScrapedData(primaryData, secondaryData);
+        console.log('Merged data result:', mergedData);
+        
+        // Check if scraping was successful
+        if (!mergedData || !mergedData.success) {
+            console.log('Scraping failed for both URLs');
+            displayScrapedData(null);
+        } else {
+            displayScrapedData(mergedData);
+        }
+        
+        // Restore button state
+        button.innerHTML = originalText;
+        button.disabled = false;
+    } catch (error) {
+        console.error('Error scraping data:', error);
+        alert(`Failed to scrape website: ${error.message}`);
+        
+        // Restore button state
+        const button = event?.target || document.querySelector('button[onclick="autoScrapeData()"]');
+        if (button) {
+            button.innerHTML = '<i class="fas fa-search mr-2"></i>Auto-Scrape';
+            button.disabled = false;
+        }
+    }
+}
+
+function mergeScrapedData(primaryResult, secondaryResult) {
+    // If only one result is successful, return it
+    if (!primaryResult || !primaryResult.success) {
+        return secondaryResult || { success: false, data: {}, source: 'Unknown' };
+    }
+    if (!secondaryResult || !secondaryResult.success) {
+        return primaryResult || { success: false, data: {}, source: 'Unknown' };
+    }
+    
+    // Both results are successful, check for conflicts
+    const primaryData = primaryResult.data || {};
+    const secondaryData = secondaryResult.data || {};
+    
+    // Find fields with conflicts (both sources have different data)
+    const conflicts = {};
+    const mergedData = {};
+    
+    const allFields = ['name', 'description', 'phone', 'email', 'website', 'address', 'favicon', 'logo'];
+    
+    for (const field of allFields) {
+        const primaryValue = primaryData[field];
+        const secondaryValue = secondaryData[field];
+        
+        if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
+            // Conflict found - both sources have different values
+            conflicts[field] = {
+                primary: { value: primaryValue, source: primaryResult.source },
+                secondary: { value: secondaryValue, source: secondaryResult.source }
+            };
+        } else {
+            // No conflict - use the available value
+            mergedData[field] = primaryValue || secondaryValue;
+        }
+    }
+    
+    // Handle coordinates separately
+    if (primaryData.coordinates && secondaryData.coordinates) {
+        if (primaryData.coordinates.latitude !== secondaryData.coordinates.latitude ||
+            primaryData.coordinates.longitude !== secondaryData.coordinates.longitude) {
+            conflicts.coordinates = {
+                primary: { value: primaryData.coordinates, source: primaryResult.source },
+                secondary: { value: secondaryData.coordinates, source: secondaryResult.source }
+            };
+        } else {
+            mergedData.coordinates = primaryData.coordinates;
+        }
+    } else {
+        mergedData.coordinates = primaryData.coordinates || secondaryData.coordinates;
+    }
+    
+    // Handle social media conflicts
+    if (primaryData.socialMedia || secondaryData.socialMedia) {
+        const primarySocial = primaryData.socialMedia || {};
+        const secondarySocial = secondaryData.socialMedia || {};
+        const socialConflicts = {};
+        const socialMerged = {};
+        
+        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
+        for (const field of socialFields) {
+            const primaryValue = primarySocial[field];
+            const secondaryValue = secondarySocial[field];
+            
+            if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
+                socialConflicts[field] = {
+                    primary: { value: primaryValue, source: primaryResult.source },
+                    secondary: { value: secondaryValue, source: secondaryResult.source }
+                };
+            } else {
+                socialMerged[field] = primaryValue || secondaryValue;
+            }
+        }
+        
+        if (Object.keys(socialConflicts).length > 0) {
+            conflicts.socialMedia = socialConflicts;
+        }
+        mergedData.socialMedia = socialMerged;
+    }
+    
+    // If there are conflicts, show conflict resolution UI
+    if (Object.keys(conflicts).length > 0) {
+        return {
+            success: true,
+            hasConflicts: true,
+            conflicts: conflicts,
+            mergedData: mergedData,
+            primaryResult: primaryResult,
+            secondaryResult: secondaryResult
+        };
+    }
+    
+    // No conflicts, return merged data
+    const sources = [];
+    if (primaryResult.source) sources.push(primaryResult.source);
+    if (secondaryResult.source) sources.push(secondaryResult.source);
+    
+    return {
+        success: true,
+        data: mergedData,
+        source: sources.join(' + '),
+        merged: true
+    };
+}
+
+function displayScrapedData(responseData) {
+    console.log('displayScrapedData called with:', responseData);
+    const preview = document.getElementById('scraped-data-preview');
+    const content = document.getElementById('scraped-content');
+    
+    console.log('Preview element:', preview);
+    console.log('Content element:', content);
+    
+    // Handle null or undefined responseData
+    if (!responseData) {
+        console.log('No response data available');
+        if (content) {
+            content.innerHTML = '<div class="text-center py-8 text-gray-500">No data could be scraped from the website.</div>';
+        }
+        if (preview) {
+            preview.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    // Check if there are conflicts that need resolution
+    if (responseData.hasConflicts) {
+        console.log('Has conflicts, showing conflict resolution');
+        displayConflictResolution(responseData);
+        return;
+    }
+    
+    // Extract data from the response structure
+    const data = responseData.data || responseData;
+    currentScrapedData = data;
+    
+    let html = '<div class="mb-4"><div class="text-sm text-gray-600 mb-3">Select which data you want to apply:</div></div>';
+    
+    // Basic fields with checkboxes
+    const basicFields = [
+        { key: 'name', label: 'Name' },
+        { key: 'description', label: 'Description' },
+        { key: 'website', label: 'Website' },
+        { key: 'email', label: 'Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'address', label: 'Address' }
+    ];
+    
+    basicFields.forEach(field => {
+        if (data[field.key]) {
+            html += `
+                <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <label class="flex items-start">
+                        <input type="checkbox" id="apply_${field.key}" checked class="mr-3 mt-1">
+                        <div>
+                            <div class="font-semibold text-sm">${field.label}:</div>
+                            <div class="text-sm text-gray-700">${data[field.key]}</div>
+                        </div>
+                    </label>
+                </div>
+            `;
+        }
+    });
+    
+    // Coordinates
+    if (data.coordinates) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_coordinates" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Coordinates:</div>
+                        <div class="text-sm text-gray-700">${data.coordinates.latitude}, ${data.coordinates.longitude}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    // Social Media
+    if (data.socialMedia && Object.keys(data.socialMedia).length > 0) {
+        html += '<div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">';
+        html += '<div class="font-semibold text-sm mb-2">Social Media:</div>';
+        Object.entries(data.socialMedia).forEach(([platform, url]) => {
+            html += `
+                <label class="flex items-start mb-2">
+                    <input type="checkbox" id="apply_social_${platform}" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-medium text-sm">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
+                        <div class="text-sm text-gray-700">${url}</div>
+                    </div>
+                </label>
+            `;
+        });
+        html += '</div>';
+    }
+    
+    // Images
+    if (data.favicon) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_favicon" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Favicon:</div>
+                        <div class="text-sm text-gray-700">${data.favicon}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    if (data.logo) {
+        html += `
+            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <label class="flex items-start">
+                    <input type="checkbox" id="apply_logo" checked class="mr-3 mt-1">
+                    <div>
+                        <div class="font-semibold text-sm">Logo:</div>
+                        <div class="text-sm text-gray-700">${data.logo}</div>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+    
+    if (responseData.source) {
+        const sourceClass = responseData.merged ? 'text-blue-600 font-semibold' : 'text-gray-600';
+        const mergedIcon = responseData.merged ? '<i class="fas fa-layer-group mr-1"></i>' : '';
+        html = `<div class="mb-2"><strong>Source:</strong> <span class="${sourceClass}">${mergedIcon}${responseData.source}</span></div>` + html;
+    }
+    
+    content.innerHTML = html || 'No useful data found on this page';
+    console.log('Setting preview content and showing preview');
+    console.log('Content HTML:', content.innerHTML);
+    preview.classList.remove('hidden');
+    preview.style.display = 'block'; // Force display in case of CSS issues
+    console.log('Preview classes after remove hidden:', preview.className);
+    console.log('Preview style display:', preview.style.display);
+}
+
+function applyScrapedData() {
+    if (!currentScrapedData) return;
+    
+    let appliedCount = 0;
+    
+    // Apply basic fields based on checkbox selection
+    const basicFields = ['name', 'description', 'website', 'email', 'phone', 'address'];
+    basicFields.forEach(field => {
+        const checkbox = document.getElementById(`apply_${field}`);
+        if (checkbox && checkbox.checked && currentScrapedData[field]) {
+            const targetField = field === 'website' ? 'edit-homepage' : `edit-${field}`;
+            const targetElement = document.getElementById(targetField);
+            if (targetElement) {
+                targetElement.value = currentScrapedData[field];
+                appliedCount++;
+            }
+        }
+    });
+    
+    // Apply coordinates
+    const coordCheckbox = document.getElementById('apply_coordinates');
+    if (coordCheckbox && coordCheckbox.checked && currentScrapedData.coordinates) {
+        const latElement = document.getElementById('edit-latitude');
+        const lngElement = document.getElementById('edit-longitude');
+        if (latElement && lngElement) {
+            latElement.value = currentScrapedData.coordinates.latitude;
+            lngElement.value = currentScrapedData.coordinates.longitude;
+            appliedCount++;
+        }
+    }
+    
+    // Apply social media
+    if (currentScrapedData.socialMedia) {
+        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
+        socialFields.forEach(platform => {
+            const checkbox = document.getElementById(`apply_social_${platform}`);
+            if (checkbox && checkbox.checked && currentScrapedData.socialMedia[platform]) {
+                const targetElement = document.getElementById(`edit-${platform}`);
+                if (targetElement) {
+                    targetElement.value = currentScrapedData.socialMedia[platform];
+                    appliedCount++;
+                }
+            }
+        });
+    }
+    
+    // Apply favicon/logo
+    const faviconCheckbox = document.getElementById('apply_favicon');
+    if (faviconCheckbox && faviconCheckbox.checked && currentScrapedData.favicon) {
+        const faviconElement = document.getElementById('edit-favicon');
+        if (faviconElement) {
+            faviconElement.value = currentScrapedData.favicon;
+            appliedCount++;
+        }
+    }
+    
+    const logoCheckbox = document.getElementById('apply_logo');
+    if (logoCheckbox && logoCheckbox.checked && currentScrapedData.logo) {
+        const logoElement = document.getElementById('edit-logo');
+        if (logoElement) {
+            logoElement.value = currentScrapedData.logo;
+            appliedCount++;
+        }
+    }
+    
+    alert(`✅ Applied ${appliedCount} selected fields to the station!`);
+    
+    // Hide scraped data section
+    const scrapedDataPreview = document.getElementById('scraped-data-preview');
+    if (scrapedDataPreview) {
+        scrapedDataPreview.classList.add('hidden');
+    }
+}
+
+function clearScrapedData() {
+    const scrapedDataPreview = document.getElementById('scraped-data-preview');
+    if (scrapedDataPreview) {
+        scrapedDataPreview.classList.add('hidden');
+    }
+    currentScrapedData = null;
+}
+
+function useHomepageUrl() {
+    if (currentEditingStation && currentEditingStation.homepage) {
+        document.getElementById('scraper-url').value = currentEditingStation.homepage;
+    } else {
+        alert('No homepage URL available for this station');
+    }
+}
+
+function testScrapingUrl() {
+    const url = document.getElementById('scraper-url').value;
+    if (url) {
+        window.open(url, '_blank');
+    }
+}
+
+let currentConflictData = null;
+
+function getSourceDisplayName(source, isPrimary) {
+    if (source === 'Google Maps') return 'Google Maps';
+    if (source === 'Website') return isPrimary ? 'Entered URL' : 'Homepage';
+    return source;
+}
+
+function displayConflictResolution(conflictData) {
+    currentConflictData = conflictData;
+    const preview = document.getElementById('scraped-data-preview');
+    const content = document.getElementById('scraped-content');
+    
+    let html = `
+        <div class="mb-4">
+            <div class="text-orange-600 font-semibold mb-2">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                Data Conflicts Found - Choose Which Values to Use:
+            </div>
+            <div class="text-sm text-gray-600 mb-3">
+                Both sources have different values for some fields. Select which ones you want to use:
+            </div>
+        </div>
+    `;
+    
+    // Display conflicts for each field
+    Object.entries(conflictData.conflicts).forEach(([field, conflict]) => {
+        if (field === 'socialMedia') {
+            // Handle social media conflicts
+            html += `<div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">`;
+            html += `<div class="font-semibold mb-2">Social Media:</div>`;
+            
+            Object.entries(conflict).forEach(([platform, platformConflict]) => {
+                const primarySourceName = getSourceDisplayName(platformConflict.primary.source, true);
+                const secondarySourceName = getSourceDisplayName(platformConflict.secondary.source, false);
+                
+                html += `
+                    <div class="mb-2 ml-4">
+                        <div class="font-medium text-sm mb-1">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
+                        <label class="flex items-center mb-1">
+                            <input type="checkbox" id="conflict_social_${platform}_primary" class="mr-2">
+                            <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                            <span class="ml-2 text-sm">${platformConflict.primary.value}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="conflict_social_${platform}_secondary" class="mr-2">
+                            <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                            <span class="ml-2 text-sm">${platformConflict.secondary.value}</span>
+                        </label>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        } else if (field === 'coordinates') {
+            // Handle coordinates conflict
+            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
+            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
+            
+            html += `
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div class="font-semibold mb-2">Coordinates:</div>
+                    <label class="flex items-center mb-2">
+                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
+                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.primary.value.latitude}, ${conflict.primary.value.longitude}</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
+                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.secondary.value.latitude}, ${conflict.secondary.value.longitude}</span>
+                    </label>
+                </div>
+            `;
+        } else {
+            // Handle regular field conflicts
+            const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
+            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
+            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
+            
+            html += `
+                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div class="font-semibold mb-2">${fieldName}:</div>
+                    <label class="flex items-center mb-2">
+                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
+                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.primary.value}</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
+                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
+                        <span class="ml-2 text-sm">${conflict.secondary.value}</span>
+                    </label>
+                </div>
+            `;
+        }
+    });
+    
+    html += `
+        <div class="mt-4 flex space-x-2">
+            <button onclick="resolveConflicts()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-check mr-2"></i>Apply Selected Values
+            </button>
+            <button onclick="cancelConflictResolution()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                <i class="fas fa-times mr-2"></i>Cancel
+            </button>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+    console.log('Conflict resolution HTML set:', html.substring(0, 200) + '...');
+    preview.classList.remove('hidden');
+    preview.style.display = 'block'; // Force display in case of CSS issues
+    console.log('Conflict resolution preview shown');
+}
+
+function resolveConflicts() {
+    if (!currentConflictData) return;
+    
+    const resolvedData = { ...currentConflictData.mergedData };
+    
+    // Resolve each conflict based on user selection
+    Object.entries(currentConflictData.conflicts).forEach(([field, conflict]) => {
+        if (field === 'socialMedia') {
+            resolvedData.socialMedia = resolvedData.socialMedia || {};
+            Object.keys(conflict).forEach(platform => {
+                const primaryBox = document.getElementById(`conflict_social_${platform}_primary`);
+                const secondaryBox = document.getElementById(`conflict_social_${platform}_secondary`);
+                if (primaryBox?.checked) {
+                    resolvedData.socialMedia[platform] = conflict[platform].primary.value;
+                } else if (secondaryBox?.checked) {
+                    resolvedData.socialMedia[platform] = conflict[platform].secondary.value;
+                }
+            });
+        } else {
+            const primaryBox = document.getElementById(`conflict_${field}_primary`);
+            const secondaryBox = document.getElementById(`conflict_${field}_secondary`);
+            if (primaryBox?.checked) {
+                resolvedData[field] = conflict.primary.value;
+            } else if (secondaryBox?.checked) {
+                resolvedData[field] = conflict.secondary.value;
+            }
+        }
+    });
+    
+    // Create final result object
+    const sources = [];
+    if (currentConflictData.primaryResult.source) sources.push(currentConflictData.primaryResult.source);
+    if (currentConflictData.secondaryResult.source) sources.push(currentConflictData.secondaryResult.source);
+    
+    const finalResult = {
+        success: true,
+        data: resolvedData,
+        source: sources.join(' + '),
+        merged: true,
+        resolved: true
+    };
+    
+    // Display the resolved data
+    displayScrapedData(finalResult);
+    currentConflictData = null;
+}
+
+function cancelConflictResolution() {
+    const preview = document.getElementById('scraped-data-preview');
+    if (preview) {
+        preview.classList.add('hidden');
+    }
+    currentConflictData = null;
+}
+
+// Form utilities
+function resetForm() {
+    if (originalStationData) {
+        populateStationEditor(originalStationData);
+        showSuccess('Form reset to original values');
+    }
+}
+
+function validateStationForm() {
+    const errors = [];
+    
+    const name = document.getElementById('edit-name').value.trim();
+    if (!name) errors.push('Station name is required');
+    
+    const streamUrl = document.getElementById('edit-stream-url').value.trim();
+    if (!streamUrl) errors.push('Stream URL is required');
+    
+    // Validate stream URL format
+    if (streamUrl) {
+        try {
+            new URL(streamUrl);
+        } catch (e) {
+            errors.push('Stream URL must be a valid URL');
+        }
+    }
+    
+    // Validate optional URLs
+    const urlFields = ['homepage', 'facebook', 'twitter', 'instagram', 'youtube'];
+    urlFields.forEach(field => {
+        const element = document.getElementById(`edit-${field}`);
+        const value = element?.value?.trim();
+        if (value) {
+            try {
+                new URL(value);
+            } catch (e) {
+                errors.push(`${field.charAt(0).toUpperCase() + field.slice(1)} URL must be a valid URL`);
+            }
+        }
+    });
+    
+    // Validate email
+    const email = document.getElementById('edit-email').value.trim();
+    if (email && !validateEmail(email, 'Email')) {
+        errors.push('Email must be a valid email address');
+    }
+    
+    // Validate coordinates
+    const latitude = document.getElementById('edit-latitude').value;
+    const longitude = document.getElementById('edit-longitude').value;
+    
+    if (latitude && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
+        errors.push('Latitude must be a number between -90 and 90');
+    }
+    
+    if (longitude && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
+        errors.push('Longitude must be a number between -180 and 180');
+    }
+    
+    return errors;
+}
+
+// Auto-save functionality
+let autoSaveTimeout;
+function enableAutoSave() {
+    const formInputs = document.querySelectorAll('#station-editor input, #station-editor textarea, #station-editor select');
+    
+    formInputs.forEach(input => {
+        input.addEventListener('input', () => {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                // Visual indicator that changes are pending
+                const saveButton = document.querySelector('#save-station');
+                if (saveButton) {
+                    saveButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+                    saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    saveButton.textContent = 'Save Changes';
+                }
+            }, 1000);
+        });
+    });
+}
+
+function closeStationEditor() {
+    // Reset manual mode if it was set
+    if (window.manualMode) {
+        window.manualMode = false;
+    }
+    
+    // Clear current editing station
+    currentEditingStation = null;
+    originalStationData = null;
+    
+    // Hide the modal
+    const modal = document.getElementById('station-editor-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+    
+    console.log('📝 Station editor closed');
+}
+
+// Load metadata configuration into the display field
+function loadMetadataConfig(station) {
+    document.getElementById('edit-metadata-url').value = station.metadataApiUrl || '';
+    document.getElementById('edit-metadata-type').value = station.metadataApiType || '';
+    document.getElementById('edit-metadata-format').value = station.metadataFormat || '';
+    
+    // Load metadata fields (JSON string)
+    if (station.metadataFields) {
+        try {
+            const fields = typeof station.metadataFields === 'string' 
+                ? JSON.parse(station.metadataFields) 
+                : station.metadataFields;
+            document.getElementById('edit-metadata-fields').value = JSON.stringify(fields, null, 2);
+        } catch (error) {
+            document.getElementById('edit-metadata-fields').value = station.metadataFields || '';
+        }
+    } else {
+        document.getElementById('edit-metadata-fields').value = '';
+    }
+    
+    // Add event listener for metadata type changes
+    const metadataTypeSelect = document.getElementById('edit-metadata-type');
+    if (metadataTypeSelect && !metadataTypeSelect.hasAttribute('data-listener-added')) {
+        metadataTypeSelect.addEventListener('change', function() {
+            if (this.value === 'rogers-auto') {
+                document.getElementById('edit-metadata-url').value = 'automatic';
+                document.getElementById('edit-metadata-format').value = 'auto';
+            }
+        });
+        metadataTypeSelect.setAttribute('data-listener-added', 'true');
+    }
+}
+
+// Test metadata URL
+async function testMetadataUrl() {
+    const url = document.getElementById('edit-metadata-url').value;
+    const format = document.getElementById('edit-metadata-format').value;
+    const metadataType = document.getElementById('edit-metadata-type').value;
+    const resultsDiv = document.getElementById('metadata-test-results');
+    const contentDiv = document.getElementById('metadata-test-content');
+    
+    if (!url && metadataType !== 'rogers-auto') {
+        alert('Please enter a metadata URL to test');
+        return;
+    }
+    
+    try {
+        resultsDiv.classList.remove('hidden');
+        contentDiv.innerHTML = '<div class="text-sm text-gray-600">Testing URL...</div>';
+        
+        const response = await fetch('/admin/test-metadata-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ url, format })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            contentDiv.innerHTML = `
+                <div class="text-sm text-green-600 mb-2">✅ Success!</div>
+                <div class="text-xs text-gray-600">
+                    <strong>Title:</strong> ${result.metadata.title || 'N/A'}<br>
+                    <strong>Artist:</strong> ${result.metadata.artist || 'N/A'}<br>
+                    <strong>Song:</strong> ${result.metadata.song || 'N/A'}
+                </div>
+            `;
+        } else {
+            contentDiv.innerHTML = `<div class="text-sm text-red-600">❌ Error: ${result.error}</div>`;
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div class="text-sm text-red-600">❌ Test failed: ${error.message}</div>`;
+    }
+}
+
+// Discover metadata URLs
+async function discoverMetadataUrls() {
+    const streamUrl = document.getElementById('edit-stream-url').value;
+    const resultsDiv = document.getElementById('metadata-test-results');
+    const contentDiv = document.getElementById('metadata-test-content');
+    
+    if (!streamUrl) {
+        alert('Please enter a stream URL first');
+        return;
+    }
+    
+    try {
+        resultsDiv.classList.remove('hidden');
+        contentDiv.innerHTML = '<div class="text-sm text-gray-600">Discovering metadata URLs...</div>';
+        
+        const response = await fetch('/admin/discover-metadata-urls', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ streamUrl })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.urls && result.urls.length > 0) {
+            let html = '<div class="text-sm text-green-600 mb-2">✅ Found URLs:</div>';
+            result.urls.forEach(url => {
+                html += `
+                    <div class="text-xs mb-1">
+                        <button onclick="applyMetadataUrl('${url}')" class="text-blue-600 hover:underline text-left">
+                            ${url}
+                        </button>
+                    </div>
+                `;
+            });
+            contentDiv.innerHTML = html;
+        } else {
+            contentDiv.innerHTML = '<div class="text-sm text-yellow-600">⚠️ No metadata URLs discovered</div>';
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div class="text-sm text-red-600">❌ Discovery failed: ${error.message}</div>`;
+    }
+}
+
+// Apply discovered metadata URL
+function applyMetadataUrl(url) {
+    document.getElementById('edit-metadata-url').value = url;
+    
+    // Try to auto-detect the type based on URL
+    if (url.includes('socast-public.s3.amazonaws.com')) {
+        document.getElementById('edit-metadata-type').value = 'socast';
+        document.getElementById('edit-metadata-format').value = 'jsonp';
+    } else if (url.includes('radio.rogersdigitalmedia.com')) {
+        document.getElementById('edit-metadata-type').value = 'rogers-auto';
+        document.getElementById('edit-metadata-format').value = 'auto';
+    } else if (url.includes('radio.co')) {
+        document.getElementById('edit-metadata-type').value = 'radio-co';
+        document.getElementById('edit-metadata-format').value = 'json';
+    } else if (url.includes('laut.fm')) {
+        document.getElementById('edit-metadata-type').value = 'laut-fm';
+        document.getElementById('edit-metadata-format').value = 'json';
+    } else if (url.includes('status-json.xsl')) {
+        document.getElementById('edit-metadata-type').value = 'icecast-json';
+        document.getElementById('edit-metadata-format').value = 'json';
+    } else if (url.includes('status.xml')) {
+        document.getElementById('edit-metadata-type').value = 'icecast-xml';
+        document.getElementById('edit-metadata-format').value = 'xml';
+    } else if (url.includes('admin.cgi')) {
+        document.getElementById('edit-metadata-type').value = 'shoutcast';
+        document.getElementById('edit-metadata-format').value = 'xml';
+    } else {
+        document.getElementById('edit-metadata-type').value = 'custom-api';
+        document.getElementById('edit-metadata-format').value = 'json';
+    }
+    
+    alert('Metadata URL applied! Click "Test URL" to verify it works.');
+}
+
+// Google Business Search Functions
+function findGoogleBusiness() {
+    // Get station info for search
+    const stationName = document.getElementById('edit-name').value.trim();
+    const city = document.getElementById('edit-city').value.trim();
+    const country = document.getElementById('edit-country').value.trim();
+    
+    if (!stationName) {
+        alert('Please enter a station name before searching');
+        return;
+    }
+    
+    // Build Google Maps search query with improved location handling
+    let searchQuery = `${stationName} radio station`;
+    
+    if (city && country) {
+        searchQuery += ` ${city}, ${country}`;
+    } else if (country) {
+        searchQuery += ` ${country}`;
+    } else if (city) {
+        searchQuery += ` ${city}`;
+    }
+    
+    const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+    
+    console.log(`🗺️ Opening Google Maps search for: ${searchQuery}`);
+    
+    // Open Google Maps search in a reasonably sized popup window
+    const popup = window.open(
+        googleMapsUrl,
+        'GoogleMapsSearch',
+        'width=1200,height=800,scrollbars=yes,resizable=yes,location=yes,menubar=no,toolbar=yes,status=no'
+    );
+    
+    if (!popup) {
+        alert('Popup blocked! Please allow popups for this site or manually search Google Maps for:\n\n' + searchQuery);
+        return;
+    }
+    
+    // Show helpful instructions
+    showGoogleSearchInstructions(stationName);
+}
+
+function showGoogleSearchInstructions(stationName) {
+    const instructionsDiv = document.getElementById('google-search-instructions');
+    if (!instructionsDiv) return;
+    
+    instructionsDiv.innerHTML = `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
+            <div class="flex items-start">
+                <i class="fas fa-map-marker-alt text-green-600 mr-2 mt-1"></i>
+                <div class="text-sm text-green-800">
+                    <div class="font-medium mb-1">Google Maps opened for "${stationName}"</div>
+                    <div class="space-y-1">
+                        <div>1. Look through the radio station results</div>
+                        <div>2. Click the station you want</div>
+                        <div>3. Copy the URL from the address bar (maps.google.com/...)</div>
+                        <div>4. Close the Google Maps tab</div>
+                        <div>5. Paste the URL in the "Website/Google Maps URL" field below</div>
+                        <div>6. Click "Auto-Scrape" to extract information</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    instructionsDiv.classList.remove('hidden');
+    
+    // Auto-hide instructions after 15 seconds
+    setTimeout(() => {
+        if (instructionsDiv) {
+            instructionsDiv.classList.add('hidden');
+        }
+    }, 15000);
+}
+
+function clearGoogleBusinessResults() {
+    // Clear any instructions from the Google search
+    const instructionsDiv = document.getElementById('google-search-instructions');
+    if (instructionsDiv) {
+        instructionsDiv.classList.add('hidden');
+        instructionsDiv.innerHTML = '';
+    }
+}
+
+// Station Analysis Functions
+let currentAnalysisResults = null;
+
+async function analyzeStation() {
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const originalText = analyzeBtn.innerHTML;
+    
+    try {
+        // Show loading state
+        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+        analyzeBtn.disabled = true;
+        
+        // Clear previous results
+        clearAnalysisResults();
+        
+        // Collect station data for analysis
+        const stationData = {
+            name: document.getElementById('edit-name').value.trim(),
+            description: document.getElementById('edit-description').value.trim(),
+            streamUrl: document.getElementById('edit-stream-url').value.trim(),
+            website: document.getElementById('edit-homepage').value.trim(),
+            location: `${document.getElementById('edit-city').value.trim()}, ${document.getElementById('edit-country').value.trim()}`
+        };
+        
+        if (!stationData.name) {
+            alert('Please enter a station name before analyzing');
+            return;
+        }
+        
+        console.log('🔍 Starting station analysis...');
+        
+        const response = await fetch('/admin/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(stationData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Analysis failed: ${response.status}`);
+        }
+        
+        const results = await response.json();
+        currentAnalysisResults = results;
+        
+        console.log('✅ Analysis complete:', results);
+        
+        // Display results
+        displayAnalysisResults(results);
+        
+    } catch (error) {
+        console.error('❌ Error analyzing station:', error);
+        alert('Analysis failed: ' + (error.message || 'Unknown error'));
+    } finally {
+        // Restore button state
+        analyzeBtn.innerHTML = originalText;
+        analyzeBtn.disabled = false;
+    }
+}
+
+function displayAnalysisResults(results) {
+    // Show suggested genres
+    if (results.suggestedGenres && results.suggestedGenres.length > 0) {
+        const container = document.getElementById('genre-suggestions');
+        const parent = document.getElementById('suggested-genres');
+        
+        container.innerHTML = '';
+        results.suggestedGenres.forEach(genre => {
+            const button = document.createElement('button');
+            button.className = 'px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md hover:bg-blue-200 transition-colors';
+            button.textContent = genre;
+            button.onclick = () => addGenre(genre);
+            container.appendChild(button);
+        });
+        
+        parent.classList.remove('hidden');
+    }
+    
+    // Show suggested subgenres
+    if (results.suggestedSubgenres && results.suggestedSubgenres.length > 0) {
+        const container = document.getElementById('subgenre-suggestions');
+        const parent = document.getElementById('suggested-subgenres');
+        
+        container.innerHTML = '';
+        results.suggestedSubgenres.forEach(subgenre => {
+            const button = document.createElement('button');
+            button.className = 'px-2 py-1 bg-green-100 text-green-800 text-xs rounded-md hover:bg-green-200 transition-colors';
+            button.textContent = subgenre;
+            button.onclick = () => addSubgenre(subgenre);
+            container.appendChild(button);
+        });
+        
+        parent.classList.remove('hidden');
+    }
+    
+    // Show suggested types
+    if (results.suggestedTypes && results.suggestedTypes.length > 0) {
+        const container = document.getElementById('type-suggestions');
+        const parent = document.getElementById('suggested-types');
+        
+        container.innerHTML = '';
+        results.suggestedTypes.forEach(type => {
+            const button = document.createElement('button');
+            button.className = 'px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-md hover:bg-purple-200 transition-colors';
+            button.textContent = type;
+            button.onclick = () => addType(type);
+            container.appendChild(button);
+        });
+        
+        parent.classList.remove('hidden');
+    }
+    
+    // Show confidence score
+    if (results.confidence) {
+        const confidenceElement = document.getElementById('analysis-confidence');
+        confidenceElement.textContent = `Confidence: ${Math.round(results.confidence * 100)}%`;
+    }
+    
+    // Show sources
+    if (results.sources && results.sources.length > 0) {
+        const sourcesElement = document.getElementById('analysis-sources');
+        sourcesElement.textContent = `Sources: ${results.sources.join(', ')}`;
+    }
+}
+
+function clearAnalysisResults() {
+    // Hide all suggestion containers
+    document.getElementById('suggested-genres').classList.add('hidden');
+    document.getElementById('suggested-subgenres').classList.add('hidden');
+    document.getElementById('suggested-types').classList.add('hidden');
+    document.getElementById('suggested-tags').classList.add('hidden');
+    
+    // Clear content
+    document.getElementById('genre-suggestions').innerHTML = '';
+    document.getElementById('subgenre-suggestions').innerHTML = '';
+    document.getElementById('type-suggestions').innerHTML = '';
+    document.getElementById('tag-suggestions').innerHTML = '';
+    document.getElementById('analysis-confidence').textContent = '';
+    document.getElementById('analysis-sources').textContent = '';
+}
+
+function applyAllSuggestions() {
+    if (!currentAnalysisResults) return;
+    
+    // Apply suggested genres
+    if (currentAnalysisResults.suggestedGenres) {
+        currentAnalysisResults.suggestedGenres.forEach(genre => addGenre(genre));
+    }
+    
+    // Apply suggested subgenres
+    if (currentAnalysisResults.suggestedSubgenres) {
+        currentAnalysisResults.suggestedSubgenres.forEach(subgenre => addSubgenre(subgenre));
+    }
+    
+    // Apply suggested types
+    if (currentAnalysisResults.suggestedTypes) {
+        currentAnalysisResults.suggestedTypes.forEach(type => addType(type));
+    }
+    
+    // Clear the suggestions after applying
+    clearAnalysisResults();
+    
+    alert('All suggestions have been applied!');
+}
+
+function applyNormalizationSuggestions() {
+    if (!currentNormalizationSuggestions) return;
+    
+    if (currentNormalizationSuggestions.genre) {
+        addGenre(currentNormalizationSuggestions.genre);
+    }
+    
+    if (currentNormalizationSuggestions.type) {
+        addType(currentNormalizationSuggestions.type);
+    }
+    
+    // Hide suggestions after applying
+    document.getElementById('normalization-suggestions').classList.add('hidden');
+    alert('Normalization suggestions applied!');
+}
+
+// Quality score recalculation
+async function recalculateQualityScore() {
+    if (!currentEditingStation || !currentEditingStation.id || currentEditingStation.id === 'NEW') {
+        alert('Please save the station first before calculating quality score');
+        return;
+    }
+    
+    const calculateBtn = document.querySelector('button[onclick*="recalculateQualityScore"]') || 
+                         document.querySelector('button[onclick*="calculateQualityScore"]');
+    
+    try {
+        // Show loading state
+        if (calculateBtn) {
+            calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculating...';
+            calculateBtn.disabled = true;
+        }
+        
+        console.log(`🔄 Calculating quality score for station ${currentEditingStation.id}`);
+        
+        const response = await fetch(`/stations/${currentEditingStation.id}/calculate-quality`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Quality calculation failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        console.log('✅ Quality score calculated:', result);
+        
+        // Update the quality score field
+        document.getElementById('edit-quality-score').value = result.qualityScore.toFixed(2);
+        
+        // Show success message with breakdown
+        let breakdownText = '';
+        if (result.breakdown) {
+            breakdownText = `\n\nBreakdown:\n`;
+            breakdownText += `• Stream Reliability: ${result.breakdown.streamReliability.toFixed(1)}%\n`;
+            breakdownText += `• Audio Quality: ${result.breakdown.audioQuality.toFixed(1)}%\n`;
+            breakdownText += `• Information Accuracy: ${result.breakdown.informationAccuracy.toFixed(1)}%\n`;
+            breakdownText += `• User Satisfaction: ${result.breakdown.userSatisfaction.toFixed(1)}%\n`;
+            breakdownText += `• Metadata Richness: ${result.breakdown.metadataRichness.toFixed(1)}%\n`;
+            breakdownText += `\nFeedback Count: ${result.feedbackCount}`;
+        }
+        
+        alert(`Quality score calculated: ${result.qualityScore.toFixed(2)}%${breakdownText}`);
+        
+        // Update the current station data
+        if (currentEditingStation) {
+            currentEditingStation.qualityScore = result.qualityScore;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error calculating quality score:', error);
+        alert('Failed to calculate quality score: ' + (error.message || 'Unknown error'));
+    } finally {
+        // Restore button state
+        if (calculateBtn) {
+            calculateBtn.innerHTML = '<i class="fas fa-calculator mr-1"></i>Calc';
+            calculateBtn.disabled = false;
+        }
+    }
+}

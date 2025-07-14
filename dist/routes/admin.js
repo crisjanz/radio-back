@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -445,6 +478,48 @@ router.post('/normalize-preview', async (req, res) => {
     catch (error) {
         console.error('❌ Error getting normalization preview:', error);
         res.status(500).json({ error: 'Failed to get normalization suggestions' });
+    }
+});
+router.get('/constants/genres', async (req, res) => {
+    try {
+        const { GENRE_SYSTEM } = await Promise.resolve().then(() => __importStar(require('../constants/genres')));
+        const response = {
+            allGenres: Object.keys(GENRE_SYSTEM),
+            genres: GENRE_SYSTEM
+        };
+        res.json(response);
+    }
+    catch (error) {
+        console.error('❌ Error loading genre constants:', error);
+        res.status(500).json({ error: 'Failed to load genre constants' });
+    }
+});
+router.get('/constants/station-types', async (req, res) => {
+    try {
+        const { STATION_TYPES } = await Promise.resolve().then(() => __importStar(require('../constants/stationTypes')));
+        const response = {
+            allTypes: Object.keys(STATION_TYPES),
+            stationTypes: STATION_TYPES
+        };
+        res.json(response);
+    }
+    catch (error) {
+        console.error('❌ Error loading station type constants:', error);
+        res.status(500).json({ error: 'Failed to load station type constants' });
+    }
+});
+router.get('/constants/collection-tags', async (req, res) => {
+    try {
+        const { COLLECTION_TAGS } = await Promise.resolve().then(() => __importStar(require('../constants/collectionTags')));
+        const response = {
+            allTags: Object.keys(COLLECTION_TAGS),
+            collectionTags: COLLECTION_TAGS
+        };
+        res.json(response);
+    }
+    catch (error) {
+        console.error('❌ Error loading collection tag constants:', error);
+        res.status(500).json({ error: 'Failed to load collection tag constants' });
     }
 });
 exports.default = router;

@@ -18,6 +18,7 @@ model User {
   
   // Relations
   favorites       UserFavorites[]
+  feedback        StationFeedback[]
 }
 
 model UserFavorites {
@@ -38,6 +39,7 @@ model Station {
   name            String
   country         String
   genre           String?
+  subgenre        String?
   type            String?
   streamUrl       String
   favicon         String?
@@ -88,6 +90,26 @@ model Station {
   consecutiveFailures Int @default(0) // Count of failed pings
   userReports     Int @default(0) // Count of user "not working" reports
   adminNotes      String? // Admin comments about stream status
+  // Quality & Curation fields
+  qualityScore    Float? // Calculated quality score (0-100)
+  feedbackCount   Int @default(0) // Number of user feedback reports
+  editorsPick     Boolean @default(false) // Manually curated high-quality stations
+  featured        Boolean @default(false) // Featured on homepage
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model StationFeedback {
+  id           Int      @id @default(autoincrement())
+  stationId    Int
+  userId       Int?     // Optional - allow anonymous feedback
+  feedbackType String   // 'stream_not_working', 'poor_audio_quality', 'wrong_information', 'great_station', 'song_info_missing'
+  details      String?  // Additional feedback details
+  ipAddress    String?  // For rate limiting anonymous feedback
+  resolved     Boolean  @default(false) // Whether the feedback has been addressed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  
+  // Relations
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

@@ -1,11 +1,44 @@
-// Station Editor Module
+// Station Editor Module - ES6 Version
 // Handles station editing modal, form validation, saving, and data management
 
+import { GenreManager } from './modules/station-editor-genres.js';
+import { ScrapingManager } from './modules/station-editor-scraping.js';
+import { ValidationManager } from './modules/station-editor-validation.js';
+import { GoogleBusinessManager } from './modules/station-editor-google.js';
+import { AnalysisManager } from './modules/station-editor-analysis.js';
+import { MetadataManager } from './modules/station-editor-metadata.js';
+
+// Global state
 let currentEditingStation = null;
 let originalStationData = null;
-let currentNormalizationSuggestions = null;
-let currentScrapedData = null;
 
+// Initialize manager instances
+const genreManager = new GenreManager();
+const scrapingManager = new ScrapingManager();
+const validationManager = new ValidationManager();
+const googleBusinessManager = new GoogleBusinessManager();
+const analysisManager = new AnalysisManager();
+const metadataManager = new MetadataManager();
+
+// Expose managers globally for onclick handlers (temporary until we convert all onclick to proper event listeners)
+window.genreManager = genreManager;
+window.scrapingManager = scrapingManager;
+window.validationManager = validationManager;
+window.googleBusinessManager = googleBusinessManager;
+window.analysisManager = analysisManager;
+window.metadataManager = metadataManager;
+
+// Expose state for modules that need it
+window.StationEditorCore = {
+    get currentEditingStation() { return currentEditingStation; },
+    set currentEditingStation(value) { currentEditingStation = value; },
+    get originalStationData() { return originalStationData; },
+    set originalStationData(value) { originalStationData = value; },
+    get currentScrapedData() { return scrapingManager.currentScrapedData; },
+    set currentScrapedData(value) { scrapingManager.currentScrapedData = value; }
+};
+
+// Core station editor functions
 async function editStation(stationId) {
     console.log('Opening station editor for station:', stationId);
     const station = stations.find(s => s.id === stationId);
@@ -16,6 +49,9 @@ async function editStation(stationId) {
     
     // Ensure modal is loaded
     await ensureModalLoaded();
+    
+    // Load genre constants
+    await genreManager.loadConstants();
     
     currentEditingStation = station;
     originalStationData = { ...station }; // Store original data for reset
@@ -36,13 +72,14 @@ function populateStationEditor(station) {
     document.getElementById('edit-name').value = station.name || '';
     document.getElementById('edit-country').value = station.country || '';
     document.getElementById('edit-city').value = station.city || '';
-    document.getElementById('edit-genre').value = station.genre || '';
-    document.getElementById('edit-type').value = station.type || '';
     document.getElementById('edit-stream-url').value = station.streamUrl || '';
     document.getElementById('edit-homepage').value = station.homepage || '';
     document.getElementById('edit-language').value = station.language || '';
     document.getElementById('edit-bitrate').value = station.bitrate || '';
     document.getElementById('edit-codec').value = station.codec || '';
+
+    // Initialize genre system using the manager
+    genreManager.initializeSystem(station);
 
     // Location & Tags
     document.getElementById('edit-tags').value = station.tags || '';
@@ -64,6 +101,15 @@ function populateStationEditor(station) {
     document.getElementById('edit-local-image').value = station.local_image_url || '';
     document.getElementById('edit-address').value = station.address || '';
 
+    // Initialize metadata system using the manager
+    metadataManager.loadMetadataConfig(station);
+
+    // Quality & Curation
+    document.getElementById('edit-quality-score').value = station.qualityScore || '';
+    document.getElementById('edit-editors-pick').checked = station.editorsPick || false;
+    document.getElementById('edit-featured').checked = station.featured || false;
+    document.getElementById('edit-is-active').checked = station.isActive !== false; // Default to true
+
     // Clear and reset scraper tools for new station
     document.getElementById('scraper-url').value = '';
     const normalizationSuggestions = document.getElementById('normalization-suggestions');
@@ -83,7 +129,7 @@ function populateStationEditor(station) {
     }
     
     // Clear scraped data
-    currentScrapedData = null;
+    scrapingManager.currentScrapedData = null;
 
     // Load current image
     loadStationImage(station);
@@ -97,9 +143,12 @@ function populateStationEditor(station) {
 
     // Load stream health
     loadStreamHealth(station);
-
+    
+    // Clear any previous Google search results
+    googleBusinessManager.clearGoogleBusinessResults();
+    
     // Check for normalization suggestions
-    checkNormalizationSuggestions(station);
+    analysisManager.checkNormalizationSuggestions(station);
 }
 
 function loadStreamHealth(station) {
@@ -124,75 +173,7 @@ function loadStreamHealth(station) {
     }
 }
 
-async function checkNormalizationSuggestions(station) {
-    const suggestionsContainer = document.getElementById('normalization-suggestions');
-    const genreSuggestion = document.getElementById('genre-suggestion');
-    const typeSuggestion = document.getElementById('type-suggestion');
-    
-    try {
-        // Call the normalizer API to get suggestions
-        const response = await fetch('/admin/normalize-preview', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                genre: station.genre,
-                type: station.type,
-                name: station.name
-            })
-        });
-        
-        if (response.ok) {
-            const suggestions = await response.json();
-            currentNormalizationSuggestions = suggestions;
-            
-            let hasSuggestions = false;
-            
-            // Show genre suggestion if different
-            if (suggestions.genre && suggestions.genre !== station.genre) {
-                genreSuggestion.innerHTML = `<span class="text-gray-600">Genre:</span> <span class="text-purple-600">${station.genre || 'empty'} → ${suggestions.genre}</span>`;
-                hasSuggestions = true;
-            } else {
-                genreSuggestion.innerHTML = '';
-            }
-            
-            // Show type suggestion if different
-            if (suggestions.type && suggestions.type !== station.type) {
-                typeSuggestion.innerHTML = `<span class="text-gray-600">Type:</span> <span class="text-purple-600">${station.type || 'empty'} → ${suggestions.type}</span>`;
-                hasSuggestions = true;
-            } else {
-                typeSuggestion.innerHTML = '';
-            }
-            
-            // Show or hide suggestions container
-            if (hasSuggestions) {
-                suggestionsContainer.classList.remove('hidden');
-            } else {
-                suggestionsContainer.classList.add('hidden');
-            }
-        }
-    } catch (error) {
-        console.error('Error checking normalization suggestions:', error);
-    }
-}
-
-function applyNormalizationSuggestions() {
-    if (!currentNormalizationSuggestions) return;
-    
-    if (currentNormalizationSuggestions.genre) {
-        document.getElementById('edit-genre').value = currentNormalizationSuggestions.genre;
-    }
-    
-    if (currentNormalizationSuggestions.type) {
-        document.getElementById('edit-type').value = currentNormalizationSuggestions.type;
-    }
-    
-    // Hide suggestions after applying
-    document.getElementById('normalization-suggestions').classList.add('hidden');
-    showSuccess('Normalization suggestions applied!');
-}
-
+// Station saving and validation functions
 async function saveStation() {
     try {
         console.log('Saving station...');
@@ -302,744 +283,258 @@ async function saveStation() {
 }
 
 function collectStationFormData() {
+    // Get current genre selections from the manager
+    const genreSelections = genreManager.getCurrentSelections();
+    
     return {
         name: document.getElementById('edit-name').value.trim(),
         country: document.getElementById('edit-country').value.trim(),
         city: document.getElementById('edit-city').value.trim(),
-        genre: document.getElementById('edit-genre').value.trim(),
-        type: document.getElementById('edit-type').value.trim(),
         streamUrl: document.getElementById('edit-stream-url').value.trim(),
         homepage: document.getElementById('edit-homepage').value.trim(),
         language: document.getElementById('edit-language').value.trim(),
-        bitrate: document.getElementById('edit-bitrate').value ? parseInt(document.getElementById('edit-bitrate').value) : null,
+        bitrate: parseInt(document.getElementById('edit-bitrate').value) || null,
         codec: document.getElementById('edit-codec').value.trim(),
+        
+        // Genre data from the manager
+        genre: genreSelections.genres,
+        subgenre: genreSelections.subgenres,  
+        type: genreSelections.types,
+        
+        // Location
         tags: document.getElementById('edit-tags').value.trim(),
-        latitude: document.getElementById('edit-latitude').value ? parseFloat(document.getElementById('edit-latitude').value) : null,
-        longitude: document.getElementById('edit-longitude').value ? parseFloat(document.getElementById('edit-longitude').value) : null,
+        latitude: parseFloat(document.getElementById('edit-latitude').value) || null,
+        longitude: parseFloat(document.getElementById('edit-longitude').value) || null,
+        
+        // Advanced fields
         description: document.getElementById('edit-description').value.trim(),
         facebookUrl: document.getElementById('edit-facebook').value.trim(),
         twitterUrl: document.getElementById('edit-twitter').value.trim(),
         instagramUrl: document.getElementById('edit-instagram').value.trim(),
         youtubeUrl: document.getElementById('edit-youtube').value.trim(),
         owner: document.getElementById('edit-owner').value.trim(),
-        establishedYear: document.getElementById('edit-established').value ? parseInt(document.getElementById('edit-established').value) : null,
+        establishedYear: parseInt(document.getElementById('edit-established').value) || null,
         email: document.getElementById('edit-email').value.trim(),
         phone: document.getElementById('edit-phone').value.trim(),
         favicon: document.getElementById('edit-favicon').value.trim(),
         logo: document.getElementById('edit-logo').value.trim(),
         local_image_url: document.getElementById('edit-local-image').value.trim(),
-        address: document.getElementById('edit-address').value.trim()
+        address: document.getElementById('edit-address').value.trim(),
+        
+        // Metadata (from manager)
+        ...metadataManager.getMetadataConfig(),
+        
+        // Quality & Curation
+        qualityScore: parseFloat(document.getElementById('edit-quality-score').value) || null,
+        editorsPick: document.getElementById('edit-editors-pick').checked,
+        featured: document.getElementById('edit-featured').checked,
+        isActive: document.getElementById('edit-is-active').checked
     };
 }
 
-// Scraper Functions
-async function autoScrapeData() {
-    let primaryUrl = document.getElementById('scraper-url').value.trim();
-    let secondaryUrl = null;
-    
-    // Determine primary and secondary URLs
-    if (primaryUrl) {
-        // If URL is provided, check if we should also use homepage as secondary
-        if (currentEditingStation && currentEditingStation.homepage && 
-            currentEditingStation.homepage !== primaryUrl) {
-            secondaryUrl = currentEditingStation.homepage;
-        }
-    } else {
-        // If no URL provided, use homepage as primary
-        if (currentEditingStation && currentEditingStation.homepage) {
-            primaryUrl = currentEditingStation.homepage;
-            document.getElementById('scraper-url').value = primaryUrl;
-        }
+// Modal management functions
+function closeStationEditor() {
+    const modal = document.getElementById('station-editor-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
     }
     
-    if (!primaryUrl) {
-        alert('Please enter a URL to scrape or ensure the station has a homepage URL');
+    // Clear all form data
+    clearStationEditor();
+    
+    // Reset state
+    currentEditingStation = null;
+    originalStationData = null;
+    scrapingManager.currentScrapedData = null;
+}
+
+function resetStationForm() {
+    if (originalStationData) {
+        populateStationEditor(originalStationData);
+    }
+}
+
+// Clear all form data
+function clearStationEditor() {
+    // Basic Info
+    document.getElementById('edit-name').value = '';
+    document.getElementById('edit-country').value = '';
+    document.getElementById('edit-city').value = '';
+    document.getElementById('edit-stream-url').value = '';
+    document.getElementById('edit-homepage').value = '';
+    document.getElementById('edit-language').value = '';
+    document.getElementById('edit-bitrate').value = '';
+    document.getElementById('edit-codec').value = '';
+
+    // Clear genre system
+    genreManager.currentGenres = [];
+    genreManager.currentSubgenres = [];
+    genreManager.currentTypes = [];
+    genreManager.renderTagsForField('genres', []);
+    genreManager.renderTagsForField('subgenres', []);
+    genreManager.renderTagsForField('types', []);
+
+    // Location & Tags
+    document.getElementById('edit-tags').value = '';
+    document.getElementById('edit-latitude').value = '';
+    document.getElementById('edit-longitude').value = '';
+
+    // Advanced Fields
+    document.getElementById('edit-description').value = '';
+    document.getElementById('edit-facebook').value = '';
+    document.getElementById('edit-twitter').value = '';
+    document.getElementById('edit-instagram').value = '';
+    document.getElementById('edit-youtube').value = '';
+    document.getElementById('edit-owner').value = '';
+    document.getElementById('edit-established').value = '';
+    document.getElementById('edit-email').value = '';
+    document.getElementById('edit-phone').value = '';
+    document.getElementById('edit-favicon').value = '';
+    document.getElementById('edit-logo').value = '';
+    document.getElementById('edit-local-image').value = '';
+    document.getElementById('edit-address').value = '';
+
+    // Metadata Configuration
+    document.getElementById('edit-metadata-url').value = '';
+    document.getElementById('edit-metadata-type').value = '';
+    document.getElementById('edit-metadata-format').value = '';
+    document.getElementById('edit-metadata-fields').value = '';
+
+    // Quality & Curation
+    document.getElementById('edit-quality-score').value = '';
+    document.getElementById('edit-editors-pick').checked = false;
+    document.getElementById('edit-featured').checked = false;
+    document.getElementById('edit-is-active').checked = true;
+
+    // Clear metadata test results
+    metadataManager.clearMetadataTestResults();
+
+    // Clear analysis results
+    analysisManager.clearAnalysisResults();
+
+    // Clear normalization suggestions
+    const suggestionsContainer = document.getElementById('normalization-suggestions');
+    if (suggestionsContainer) {
+        suggestionsContainer.classList.add('hidden');
+    }
+
+    // Clear Google Business results
+    googleBusinessManager.clearGoogleBusinessResults();
+
+    // Clear scraped data preview
+    const scrapedDataPreview = document.getElementById('scraped-data-preview');
+    if (scrapedDataPreview) {
+        scrapedDataPreview.style.display = 'none';
+    }
+
+    // Reset scraper URL
+    document.getElementById('scraper-url').value = '';
+
+    // Clear stream status
+    const statusElement = document.getElementById('stream-status');
+    const lastCheckElement = document.getElementById('last-check');
+    if (statusElement) statusElement.innerHTML = '';
+    if (lastCheckElement) lastCheckElement.textContent = '';
+
+    // Clear header info
+    document.getElementById('editor-station-name').textContent = '';
+    document.getElementById('editor-station-id').textContent = '';
+}
+
+// Utility functions
+function showError(message) {
+    console.error('Error:', message);
+    alert(message);
+}
+
+function showSuccess(message) {
+    console.log('Success:', message);
+    alert(message);
+}
+
+// Stream testing functions
+async function testStreamHealth() {
+    const streamUrl = document.getElementById('edit-stream-url').value.trim();
+    if (!streamUrl) {
+        alert('Please enter a stream URL first');
         return;
     }
     
-    // Validate URLs
     try {
-        new URL(primaryUrl);
-        if (secondaryUrl) new URL(secondaryUrl);
-    } catch (e) {
-        alert('Please enter valid URLs (include http:// or https://)');
-        return;
-    }
-    
-    try {
-        console.log('Scraping primary URL:', primaryUrl);
-        if (secondaryUrl) console.log('Scraping secondary URL:', secondaryUrl);
-        
-        // Show loading state
-        const button = event?.target || document.querySelector('button[onclick="autoScrapeData()"]');
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Scraping...';
-        button.disabled = true;
-        
-        // Scrape primary URL
-        const primaryResponse = await fetch('/admin/scrape-url', {
+        const response = await fetch('/health/test-stream', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ url: primaryUrl })
+            body: JSON.stringify({ streamUrl })
         });
         
-        let primaryData = null;
-        if (primaryResponse.ok) {
-            primaryData = await primaryResponse.json();
-            console.log('Primary scrape result:', primaryData);
-        }
-        
-        // Scrape secondary URL if provided
-        let secondaryData = null;
-        if (secondaryUrl) {
-            const secondaryResponse = await fetch('/admin/scrape-url', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url: secondaryUrl })
-            });
-            
-            if (secondaryResponse.ok) {
-                secondaryData = await secondaryResponse.json();
-                console.log('Secondary scrape result:', secondaryData);
-            }
-        }
-        
-        // Merge the data
-        const mergedData = mergeScrapedData(primaryData, secondaryData);
-        console.log('Merged data result:', mergedData);
-        
-        // Check if scraping was successful
-        if (!mergedData || !mergedData.success) {
-            console.log('Scraping failed for both URLs');
-            displayScrapedData(null);
-        } else {
-            displayScrapedData(mergedData);
-        }
-        
-        // Restore button state
-        button.innerHTML = originalText;
-        button.disabled = false;
+        const result = await response.json();
+        alert(result.success ? 'Stream is accessible!' : `Stream test failed: ${result.error}`);
     } catch (error) {
-        console.error('Error scraping data:', error);
-        alert(`Failed to scrape website: ${error.message}`);
-        
-        // Restore button state
-        const button = event?.target || document.querySelector('button[onclick="autoScrapeData()"]');
-        if (button) {
-            button.innerHTML = '<i class="fas fa-search mr-2"></i>Auto-Scrape';
-            button.disabled = false;
-        }
+        alert(`Stream test failed: ${error.message}`);
     }
 }
 
-function mergeScrapedData(primaryResult, secondaryResult) {
-    // If only one result is successful, return it
-    if (!primaryResult || !primaryResult.success) {
-        return secondaryResult || { success: false, data: {}, source: 'Unknown' };
-    }
-    if (!secondaryResult || !secondaryResult.success) {
-        return primaryResult || { success: false, data: {}, source: 'Unknown' };
-    }
-    
-    // Both results are successful, check for conflicts
-    const primaryData = primaryResult.data || {};
-    const secondaryData = secondaryResult.data || {};
-    
-    // Find fields with conflicts (both sources have different data)
-    const conflicts = {};
-    const mergedData = {};
-    
-    const allFields = ['name', 'description', 'phone', 'email', 'website', 'address', 'favicon', 'logo'];
-    
-    for (const field of allFields) {
-        const primaryValue = primaryData[field];
-        const secondaryValue = secondaryData[field];
-        
-        if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
-            // Conflict found - both sources have different values
-            conflicts[field] = {
-                primary: { value: primaryValue, source: primaryResult.source },
-                secondary: { value: secondaryValue, source: secondaryResult.source }
-            };
-        } else {
-            // No conflict - use the available value
-            mergedData[field] = primaryValue || secondaryValue;
-        }
-    }
-    
-    // Handle coordinates separately
-    if (primaryData.coordinates && secondaryData.coordinates) {
-        if (primaryData.coordinates.latitude !== secondaryData.coordinates.latitude ||
-            primaryData.coordinates.longitude !== secondaryData.coordinates.longitude) {
-            conflicts.coordinates = {
-                primary: { value: primaryData.coordinates, source: primaryResult.source },
-                secondary: { value: secondaryData.coordinates, source: secondaryResult.source }
-            };
-        } else {
-            mergedData.coordinates = primaryData.coordinates;
-        }
-    } else {
-        mergedData.coordinates = primaryData.coordinates || secondaryData.coordinates;
-    }
-    
-    // Handle social media conflicts
-    if (primaryData.socialMedia || secondaryData.socialMedia) {
-        const primarySocial = primaryData.socialMedia || {};
-        const secondarySocial = secondaryData.socialMedia || {};
-        const socialConflicts = {};
-        const socialMerged = {};
-        
-        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
-        for (const field of socialFields) {
-            const primaryValue = primarySocial[field];
-            const secondaryValue = secondarySocial[field];
-            
-            if (primaryValue && secondaryValue && primaryValue !== secondaryValue) {
-                socialConflicts[field] = {
-                    primary: { value: primaryValue, source: primaryResult.source },
-                    secondary: { value: secondaryValue, source: secondaryResult.source }
-                };
-            } else {
-                socialMerged[field] = primaryValue || secondaryValue;
-            }
-        }
-        
-        if (Object.keys(socialConflicts).length > 0) {
-            conflicts.socialMedia = socialConflicts;
-        }
-        mergedData.socialMedia = socialMerged;
-    }
-    
-    // If there are conflicts, show conflict resolution UI
-    if (Object.keys(conflicts).length > 0) {
-        return {
-            success: true,
-            hasConflicts: true,
-            conflicts: conflicts,
-            mergedData: mergedData,
-            primaryResult: primaryResult,
-            secondaryResult: secondaryResult
-        };
-    }
-    
-    // No conflicts, return merged data
-    const sources = [];
-    if (primaryResult.source) sources.push(primaryResult.source);
-    if (secondaryResult.source) sources.push(secondaryResult.source);
-    
-    return {
-        success: true,
-        data: mergedData,
-        source: sources.join(' + '),
-        merged: true
-    };
+// Test stream connectivity (alias for compatibility)
+async function testStreamConnectivity() {
+    return testStreamHealth();
 }
 
-function displayScrapedData(responseData) {
-    console.log('displayScrapedData called with:', responseData);
-    const preview = document.getElementById('scraped-data-preview');
-    const content = document.getElementById('scraped-content');
-    
-    console.log('Preview element:', preview);
-    console.log('Content element:', content);
-    
-    // Handle null or undefined responseData
-    if (!responseData) {
-        console.log('No response data available');
-        if (content) {
-            content.innerHTML = '<div class="text-center py-8 text-gray-500">No data could be scraped from the website.</div>';
-        }
-        if (preview) {
-            preview.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    // Check if there are conflicts that need resolution
-    if (responseData.hasConflicts) {
-        console.log('Has conflicts, showing conflict resolution');
-        displayConflictResolution(responseData);
-        return;
-    }
-    
-    // Extract data from the response structure
-    const data = responseData.data || responseData;
-    currentScrapedData = data;
-    
-    let html = '<div class="mb-4"><div class="text-sm text-gray-600 mb-3">Select which data you want to apply:</div></div>';
-    
-    // Basic fields with checkboxes
-    const basicFields = [
-        { key: 'name', label: 'Name' },
-        { key: 'description', label: 'Description' },
-        { key: 'website', label: 'Website' },
-        { key: 'email', label: 'Email' },
-        { key: 'phone', label: 'Phone' },
-        { key: 'address', label: 'Address' }
-    ];
-    
-    basicFields.forEach(field => {
-        if (data[field.key]) {
-            html += `
-                <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <label class="flex items-start">
-                        <input type="checkbox" id="apply_${field.key}" checked class="mr-3 mt-1">
-                        <div>
-                            <div class="font-semibold text-sm">${field.label}:</div>
-                            <div class="text-sm text-gray-700">${data[field.key]}</div>
-                        </div>
-                    </label>
-                </div>
-            `;
-        }
-    });
-    
-    // Coordinates
-    if (data.coordinates) {
-        html += `
-            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                <label class="flex items-start">
-                    <input type="checkbox" id="apply_coordinates" checked class="mr-3 mt-1">
-                    <div>
-                        <div class="font-semibold text-sm">Coordinates:</div>
-                        <div class="text-sm text-gray-700">${data.coordinates.latitude}, ${data.coordinates.longitude}</div>
-                    </div>
-                </label>
-            </div>
-        `;
-    }
-    
-    // Social Media
-    if (data.socialMedia && Object.keys(data.socialMedia).length > 0) {
-        html += '<div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">';
-        html += '<div class="font-semibold text-sm mb-2">Social Media:</div>';
-        Object.entries(data.socialMedia).forEach(([platform, url]) => {
-            html += `
-                <label class="flex items-start mb-2">
-                    <input type="checkbox" id="apply_social_${platform}" checked class="mr-3 mt-1">
-                    <div>
-                        <div class="font-medium text-sm">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
-                        <div class="text-sm text-gray-700">${url}</div>
-                    </div>
-                </label>
-            `;
-        });
-        html += '</div>';
-    }
-    
-    // Images
-    if (data.favicon) {
-        html += `
-            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                <label class="flex items-start">
-                    <input type="checkbox" id="apply_favicon" checked class="mr-3 mt-1">
-                    <div>
-                        <div class="font-semibold text-sm">Favicon:</div>
-                        <div class="text-sm text-gray-700">${data.favicon}</div>
-                    </div>
-                </label>
-            </div>
-        `;
-    }
-    
-    if (data.logo) {
-        html += `
-            <div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                <label class="flex items-start">
-                    <input type="checkbox" id="apply_logo" checked class="mr-3 mt-1">
-                    <div>
-                        <div class="font-semibold text-sm">Logo:</div>
-                        <div class="text-sm text-gray-700">${data.logo}</div>
-                    </div>
-                </label>
-            </div>
-        `;
-    }
-    
-    if (responseData.source) {
-        const sourceClass = responseData.merged ? 'text-blue-600 font-semibold' : 'text-gray-600';
-        const mergedIcon = responseData.merged ? '<i class="fas fa-layer-group mr-1"></i>' : '';
-        html = `<div class="mb-2"><strong>Source:</strong> <span class="${sourceClass}">${mergedIcon}${responseData.source}</span></div>` + html;
-    }
-    
-    content.innerHTML = html || 'No useful data found on this page';
-    console.log('Setting preview content and showing preview');
-    console.log('Content HTML:', content.innerHTML);
-    preview.classList.remove('hidden');
-    preview.style.display = 'block'; // Force display in case of CSS issues
-    console.log('Preview classes after remove hidden:', preview.className);
-    console.log('Preview style display:', preview.style.display);
-}
+// Expose functions globally for onclick handlers (temporary)
+window.editStation = editStation;
+window.saveStation = saveStation;
+window.closeStationEditor = closeStationEditor;
+window.resetStationForm = resetStationForm;
+window.testStreamHealth = testStreamHealth;
+window.testStreamConnectivity = testStreamConnectivity;
 
-function applyScrapedData() {
-    if (!currentScrapedData) return;
-    
-    let appliedCount = 0;
-    
-    // Apply basic fields based on checkbox selection
-    const basicFields = ['name', 'description', 'website', 'email', 'phone', 'address'];
-    basicFields.forEach(field => {
-        const checkbox = document.getElementById(`apply_${field}`);
-        if (checkbox && checkbox.checked && currentScrapedData[field]) {
-            const targetField = field === 'website' ? 'edit-homepage' : `edit-${field}`;
-            const targetElement = document.getElementById(targetField);
-            if (targetElement) {
-                targetElement.value = currentScrapedData[field];
-                appliedCount++;
-            }
-        }
-    });
-    
-    // Apply coordinates
-    const coordCheckbox = document.getElementById('apply_coordinates');
-    if (coordCheckbox && coordCheckbox.checked && currentScrapedData.coordinates) {
-        const latElement = document.getElementById('edit-latitude');
-        const lngElement = document.getElementById('edit-longitude');
-        if (latElement && lngElement) {
-            latElement.value = currentScrapedData.coordinates.latitude;
-            lngElement.value = currentScrapedData.coordinates.longitude;
-            appliedCount++;
-        }
-    }
-    
-    // Apply social media
-    if (currentScrapedData.socialMedia) {
-        const socialFields = ['facebook', 'twitter', 'instagram', 'youtube'];
-        socialFields.forEach(platform => {
-            const checkbox = document.getElementById(`apply_social_${platform}`);
-            if (checkbox && checkbox.checked && currentScrapedData.socialMedia[platform]) {
-                const targetElement = document.getElementById(`edit-${platform}`);
-                if (targetElement) {
-                    targetElement.value = currentScrapedData.socialMedia[platform];
-                    appliedCount++;
-                }
-            }
-        });
-    }
-    
-    // Apply favicon/logo
-    const faviconCheckbox = document.getElementById('apply_favicon');
-    if (faviconCheckbox && faviconCheckbox.checked && currentScrapedData.favicon) {
-        const faviconElement = document.getElementById('edit-favicon');
-        if (faviconElement) {
-            faviconElement.value = currentScrapedData.favicon;
-            appliedCount++;
-        }
-    }
-    
-    const logoCheckbox = document.getElementById('apply_logo');
-    if (logoCheckbox && logoCheckbox.checked && currentScrapedData.logo) {
-        const logoElement = document.getElementById('edit-logo');
-        if (logoElement) {
-            logoElement.value = currentScrapedData.logo;
-            appliedCount++;
-        }
-    }
-    
-    alert(`✅ Applied ${appliedCount} selected fields to the station!`);
-    
-    // Hide scraped data section
-    const scrapedDataPreview = document.getElementById('scraped-data-preview');
-    if (scrapedDataPreview) {
-        scrapedDataPreview.classList.add('hidden');
-    }
-}
+// Expose state for other scripts that need it (as properties, not functions)
+Object.defineProperty(window, 'currentEditingStation', {
+    get() { return currentEditingStation; },
+    set(value) { currentEditingStation = value; }
+});
 
-function clearScrapedData() {
-    const scrapedDataPreview = document.getElementById('scraped-data-preview');
-    if (scrapedDataPreview) {
-        scrapedDataPreview.classList.add('hidden');
-    }
-    currentScrapedData = null;
-}
+// Analysis functions
+window.analyzeStation = () => analysisManager.analyzeStation();
+window.recalculateQualityScore = () => analysisManager.recalculateQualityScore();
+window.applyNormalizationSuggestions = () => analysisManager.applyNormalizationSuggestions();
 
-function useHomepageUrl() {
-    if (currentEditingStation && currentEditingStation.homepage) {
-        document.getElementById('scraper-url').value = currentEditingStation.homepage;
-    } else {
-        alert('No homepage URL available for this station');
-    }
-}
+// Metadata functions
+window.testMetadataUrl = () => metadataManager.testMetadataUrl();
+window.discoverMetadataUrls = () => metadataManager.discoverMetadataUrls();
 
-function testScrapingUrl() {
-    const url = document.getElementById('scraper-url').value;
-    if (url) {
-        window.open(url, '_blank');
-    }
-}
+// Expose manager methods globally for onclick handlers (temporary until we convert all onclick)
+// Genre functions
+window.addGenre = (value) => genreManager.addGenre(value);
+window.addSubgenre = (value) => genreManager.addSubgenre(value);
+window.addType = (value) => genreManager.addType(value);
+window.removeGenres = (index) => genreManager.removeGenres(index);
+window.removeSubgenres = (index) => genreManager.removeSubgenres(index);
+window.removeTypes = (index) => genreManager.removeTypes(index);
+window.showCustomGenreInput = () => genreManager.showCustomGenreInput();
+window.cancelCustomGenre = () => genreManager.cancelCustomGenre();
+window.addCustomGenre = () => genreManager.addCustomGenre();
+window.showCustomSubgenreInput = () => genreManager.showCustomSubgenreInput();
+window.cancelCustomSubgenre = () => genreManager.cancelCustomSubgenre();
+window.addCustomSubgenre = () => genreManager.addCustomSubgenre();
+window.showCustomTypeInput = () => genreManager.showCustomTypeInput();
+window.cancelCustomType = () => genreManager.cancelCustomType();
+window.addCustomType = () => genreManager.addCustomType();
 
-let currentConflictData = null;
+// Scraping functions
+window.autoScrapeData = () => scrapingManager.autoScrapeData();
+window.applyScrapedData = () => scrapingManager.applyScrapedData();
+window.clearScrapedData = () => scrapingManager.clearScrapedData();
+window.useHomepageUrl = () => scrapingManager.useHomepageUrl();
+window.testScrapingUrl = () => scrapingManager.testScrapingUrl();
 
-function getSourceDisplayName(source, isPrimary) {
-    if (source === 'Google Maps') return 'Google Maps';
-    if (source === 'Website') return isPrimary ? 'Entered URL' : 'Homepage';
-    return source;
-}
+// Google Business functions
+window.findGoogleBusiness = () => googleBusinessManager.findGoogleBusiness();
 
-function displayConflictResolution(conflictData) {
-    currentConflictData = conflictData;
-    const preview = document.getElementById('scraped-data-preview');
-    const content = document.getElementById('scraped-content');
-    
-    let html = `
-        <div class="mb-4">
-            <div class="text-orange-600 font-semibold mb-2">
-                <i class="fas fa-exclamation-triangle mr-1"></i>
-                Data Conflicts Found - Choose Which Values to Use:
-            </div>
-            <div class="text-sm text-gray-600 mb-3">
-                Both sources have different values for some fields. Select which ones you want to use:
-            </div>
-        </div>
-    `;
-    
-    // Display conflicts for each field
-    Object.entries(conflictData.conflicts).forEach(([field, conflict]) => {
-        if (field === 'socialMedia') {
-            // Handle social media conflicts
-            html += `<div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">`;
-            html += `<div class="font-semibold mb-2">Social Media:</div>`;
-            
-            Object.entries(conflict).forEach(([platform, platformConflict]) => {
-                const primarySourceName = getSourceDisplayName(platformConflict.primary.source, true);
-                const secondarySourceName = getSourceDisplayName(platformConflict.secondary.source, false);
-                
-                html += `
-                    <div class="mb-2 ml-4">
-                        <div class="font-medium text-sm mb-1">${platform.charAt(0).toUpperCase() + platform.slice(1)}:</div>
-                        <label class="flex items-center mb-1">
-                            <input type="checkbox" id="conflict_social_${platform}_primary" class="mr-2">
-                            <span class="text-blue-600 text-sm">${primarySourceName}:</span>
-                            <span class="ml-2 text-sm">${platformConflict.primary.value}</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" id="conflict_social_${platform}_secondary" class="mr-2">
-                            <span class="text-green-600 text-sm">${secondarySourceName}:</span>
-                            <span class="ml-2 text-sm">${platformConflict.secondary.value}</span>
-                        </label>
-                    </div>
-                `;
-            });
-            html += `</div>`;
-        } else if (field === 'coordinates') {
-            // Handle coordinates conflict
-            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
-            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
-            
-            html += `
-                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <div class="font-semibold mb-2">Coordinates:</div>
-                    <label class="flex items-center mb-2">
-                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
-                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
-                        <span class="ml-2 text-sm">${conflict.primary.value.latitude}, ${conflict.primary.value.longitude}</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
-                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
-                        <span class="ml-2 text-sm">${conflict.secondary.value.latitude}, ${conflict.secondary.value.longitude}</span>
-                    </label>
-                </div>
-            `;
-        } else {
-            // Handle regular field conflicts
-            const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
-            const primarySourceName = getSourceDisplayName(conflict.primary.source, true);
-            const secondarySourceName = getSourceDisplayName(conflict.secondary.source, false);
-            
-            html += `
-                <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <div class="font-semibold mb-2">${fieldName}:</div>
-                    <label class="flex items-center mb-2">
-                        <input type="checkbox" id="conflict_${field}_primary" class="mr-2">
-                        <span class="text-blue-600 text-sm">${primarySourceName}:</span>
-                        <span class="ml-2 text-sm">${conflict.primary.value}</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="checkbox" id="conflict_${field}_secondary" class="mr-2">
-                        <span class="text-green-600 text-sm">${secondarySourceName}:</span>
-                        <span class="ml-2 text-sm">${conflict.secondary.value}</span>
-                    </label>
-                </div>
-            `;
-        }
-    });
-    
-    html += `
-        <div class="mt-4 flex space-x-2">
-            <button onclick="resolveConflicts()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <i class="fas fa-check mr-2"></i>Apply Selected Values
-            </button>
-            <button onclick="cancelConflictResolution()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-                <i class="fas fa-times mr-2"></i>Cancel
-            </button>
-        </div>
-    `;
-    
-    content.innerHTML = html;
-    console.log('Conflict resolution HTML set:', html.substring(0, 200) + '...');
-    preview.classList.remove('hidden');
-    preview.style.display = 'block'; // Force display in case of CSS issues
-    console.log('Conflict resolution preview shown');
-}
+// Validation functions
+window.resetForm = () => validationManager.resetForm();
+window.validateStationForm = () => validationManager.validateStationForm();
 
-function resolveConflicts() {
-    if (!currentConflictData) return;
-    
-    const resolvedData = { ...currentConflictData.mergedData };
-    
-    // Resolve each conflict based on user selection
-    Object.entries(currentConflictData.conflicts).forEach(([field, conflict]) => {
-        if (field === 'socialMedia') {
-            resolvedData.socialMedia = resolvedData.socialMedia || {};
-            Object.keys(conflict).forEach(platform => {
-                const primaryBox = document.getElementById(`conflict_social_${platform}_primary`);
-                const secondaryBox = document.getElementById(`conflict_social_${platform}_secondary`);
-                if (primaryBox?.checked) {
-                    resolvedData.socialMedia[platform] = conflict[platform].primary.value;
-                } else if (secondaryBox?.checked) {
-                    resolvedData.socialMedia[platform] = conflict[platform].secondary.value;
-                }
-            });
-        } else {
-            const primaryBox = document.getElementById(`conflict_${field}_primary`);
-            const secondaryBox = document.getElementById(`conflict_${field}_secondary`);
-            if (primaryBox?.checked) {
-                resolvedData[field] = conflict.primary.value;
-            } else if (secondaryBox?.checked) {
-                resolvedData[field] = conflict.secondary.value;
-            }
-        }
-    });
-    
-    // Create final result object
-    const sources = [];
-    if (currentConflictData.primaryResult.source) sources.push(currentConflictData.primaryResult.source);
-    if (currentConflictData.secondaryResult.source) sources.push(currentConflictData.secondaryResult.source);
-    
-    const finalResult = {
-        success: true,
-        data: resolvedData,
-        source: sources.join(' + '),
-        merged: true,
-        resolved: true
-    };
-    
-    // Display the resolved data
-    displayScrapedData(finalResult);
-    currentConflictData = null;
-}
-
-function cancelConflictResolution() {
-    const preview = document.getElementById('scraped-data-preview');
-    if (preview) {
-        preview.classList.add('hidden');
-    }
-    currentConflictData = null;
-}
-
-// Form utilities
-function resetForm() {
-    if (originalStationData) {
-        populateStationEditor(originalStationData);
-        showSuccess('Form reset to original values');
-    }
-}
-
-function validateStationForm() {
-    const errors = [];
-    
-    const name = document.getElementById('edit-name').value.trim();
-    if (!name) errors.push('Station name is required');
-    
-    const streamUrl = document.getElementById('edit-stream-url').value.trim();
-    if (!streamUrl) errors.push('Stream URL is required');
-    
-    // Validate stream URL format
-    if (streamUrl) {
-        try {
-            new URL(streamUrl);
-        } catch (e) {
-            errors.push('Stream URL must be a valid URL');
-        }
-    }
-    
-    // Validate optional URLs
-    const urlFields = ['homepage', 'facebook', 'twitter', 'instagram', 'youtube'];
-    urlFields.forEach(field => {
-        const element = document.getElementById(`edit-${field}`);
-        const value = element?.value?.trim();
-        if (value) {
-            try {
-                new URL(value);
-            } catch (e) {
-                errors.push(`${field.charAt(0).toUpperCase() + field.slice(1)} URL must be a valid URL`);
-            }
-        }
-    });
-    
-    // Validate email
-    const email = document.getElementById('edit-email').value.trim();
-    if (email && !validateEmail(email, 'Email')) {
-        errors.push('Email must be a valid email address');
-    }
-    
-    // Validate coordinates
-    const latitude = document.getElementById('edit-latitude').value;
-    const longitude = document.getElementById('edit-longitude').value;
-    
-    if (latitude && (isNaN(latitude) || latitude < -90 || latitude > 90)) {
-        errors.push('Latitude must be a number between -90 and 90');
-    }
-    
-    if (longitude && (isNaN(longitude) || longitude < -180 || longitude > 180)) {
-        errors.push('Longitude must be a number between -180 and 180');
-    }
-    
-    return errors;
-}
-
-// Auto-save functionality
-let autoSaveTimeout;
-function enableAutoSave() {
-    const formInputs = document.querySelectorAll('#station-editor input, #station-editor textarea, #station-editor select');
-    
-    formInputs.forEach(input => {
-        input.addEventListener('input', () => {
-            clearTimeout(autoSaveTimeout);
-            autoSaveTimeout = setTimeout(() => {
-                // Visual indicator that changes are pending
-                const saveButton = document.querySelector('#save-station');
-                if (saveButton) {
-                    saveButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
-                    saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                    saveButton.textContent = 'Save Changes';
-                }
-            }, 1000);
-        });
-    });
-}
-
-function closeStationEditor() {
-    // Reset manual mode if it was set
-    if (window.manualMode) {
-        window.manualMode = false;
-    }
-    
-    // Clear current editing station
-    currentEditingStation = null;
-    originalStationData = null;
-    
-    // Hide the modal
-    const modal = document.getElementById('station-editor-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-    
-    console.log('📝 Station editor closed');
-}
+console.log('✅ Station Editor ES6 modules loaded successfully');

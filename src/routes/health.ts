@@ -30,7 +30,8 @@ router.get('/', async (req: Request, res: Response) => {
         '/health/problematic': 'Get stations with issues',
         '/health/check-batch': 'Run batch health check',
         '/health/force-check': 'Force check specific station',
-        '/health/schedule': 'Get health check schedule'
+        '/health/schedule': 'Get health check schedule',
+        '/health/test-stream': 'Test a specific stream URL'
       }
     });
   } catch (error) {
@@ -497,6 +498,37 @@ router.get('/schedule', async (req: Request, res: Response) => {
     return res.status(500).json({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Failed to fetch schedule' 
+    });
+  }
+});
+
+// Test a specific stream URL (for station editor)
+router.post('/test-stream', async (req: Request, res: Response) => {
+  try {
+    const { streamUrl } = req.body;
+    
+    if (!streamUrl) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Stream URL is required' 
+      });
+    }
+    
+    console.log(`🧪 Testing stream: ${streamUrl}`);
+    const isWorking = await pingStream(streamUrl);
+    
+    return res.json({
+      success: isWorking,
+      streamUrl,
+      message: isWorking ? 'Stream is accessible' : 'Stream is not accessible',
+      tested: true
+    });
+    
+  } catch (error) {
+    console.error('❌ Error testing stream:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Stream test failed' 
     });
   }
 });

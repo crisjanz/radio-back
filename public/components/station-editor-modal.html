@@ -1,4 +1,76 @@
 <!-- Unified Station Editor Modal -->
+<style>
+.tag-item {
+    display: inline-flex;
+    align-items: center;
+    background-color: #3b82f6;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 14px;
+    gap: 6px;
+}
+
+.tag-item:hover {
+    background-color: #2563eb;
+}
+
+.tag-remove {
+    cursor: pointer;
+    opacity: 0.8;
+    font-size: 12px;
+    padding: 2px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.tag-remove:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.tag-placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.business-result {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background-color: #f9fafb;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.business-result:hover {
+    background-color: #f3f4f6;
+    border-color: #3b82f6;
+}
+
+.business-result.selected {
+    background-color: #dbeafe;
+    border-color: #3b82f6;
+}
+
+.business-confidence {
+    font-size: 12px;
+    color: #6b7280;
+    margin-left: auto;
+}
+
+.business-result .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+}
+
+.business-result {
+    max-width: 100%;
+    overflow: hidden;
+}
+</style>
 <div id="station-editor-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-xl max-w-7xl w-full max-h-[95vh] overflow-hidden flex flex-col">
         <!-- Header -->
@@ -42,12 +114,103 @@
                                 <input type="text" id="edit-city" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Genre</label>
-                                <input type="text" id="edit-genre" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Genres</label>
+                                <!-- Current Genres Display -->
+                                <div id="current-genres" class="flex flex-wrap gap-2 mb-2 min-h-[2rem] p-2 border border-gray-200 rounded-lg bg-gray-50">
+                                    <span class="text-sm text-gray-500 genre-placeholder">No genres selected</span>
+                                </div>
+                                <!-- Add Genre Dropdown -->
+                                <div class="flex space-x-2">
+                                    <div class="flex-1 relative">
+                                        <select id="add-genre-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white">
+                                            <option value="">Add Genre...</option>
+                                            <!-- Options will be populated dynamically -->
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                            <i class="fas fa-chevron-down text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="showCustomGenreInput()" class="px-3 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+                                        <i class="fas fa-plus mr-1"></i>Custom
+                                    </button>
+                                </div>
+                                <div id="custom-genre-input" class="hidden mt-2">
+                                    <input type="text" id="custom-genre" placeholder="Enter custom genre..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <div class="flex space-x-2 mt-2">
+                                        <button type="button" onclick="addCustomGenre()" class="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                                            <i class="fas fa-check mr-1"></i>Add
+                                        </button>
+                                        <button type="button" onclick="cancelCustomGenre()" class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-100">
+                                            <i class="fas fa-times mr-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                                <input type="text" id="edit-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Subgenres</label>
+                                <!-- Current Subgenres Display -->
+                                <div id="current-subgenres" class="flex flex-wrap gap-2 mb-2 min-h-[2rem] p-2 border border-gray-200 rounded-lg bg-gray-50">
+                                    <span class="text-sm text-gray-500 subgenre-placeholder">No subgenres selected</span>
+                                </div>
+                                <!-- Add Subgenre Dropdown -->
+                                <div class="flex space-x-2">
+                                    <div class="flex-1 relative">
+                                        <select id="add-subgenre-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white">
+                                            <option value="">Add Subgenre...</option>
+                                            <!-- Options will be populated dynamically -->
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                            <i class="fas fa-chevron-down text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="showCustomSubgenreInput()" class="px-3 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+                                        <i class="fas fa-plus mr-1"></i>Custom
+                                    </button>
+                                </div>
+                                <div id="custom-subgenre-input" class="hidden mt-2">
+                                    <input type="text" id="custom-subgenre" placeholder="Enter custom subgenre..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <div class="flex space-x-2 mt-2">
+                                        <button type="button" onclick="addCustomSubgenre()" class="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                                            <i class="fas fa-check mr-1"></i>Add
+                                        </button>
+                                        <button type="button" onclick="cancelCustomSubgenre()" class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-100">
+                                            <i class="fas fa-times mr-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Types</label>
+                                <!-- Current Types Display -->
+                                <div id="current-types" class="flex flex-wrap gap-2 mb-2 min-h-[2rem] p-2 border border-gray-200 rounded-lg bg-gray-50">
+                                    <span class="text-sm text-gray-500 type-placeholder">No types selected</span>
+                                </div>
+                                <!-- Add Type Dropdown -->
+                                <div class="flex space-x-2">
+                                    <div class="flex-1 relative">
+                                        <select id="add-type-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white">
+                                            <option value="">Add Type...</option>
+                                            <!-- Options will be populated dynamically -->
+                                        </select>
+                                        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                            <i class="fas fa-chevron-down text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="showCustomTypeInput()" class="px-3 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+                                        <i class="fas fa-plus mr-1"></i>Custom
+                                    </button>
+                                </div>
+                                <div id="custom-type-input" class="hidden mt-2">
+                                    <input type="text" id="custom-type" placeholder="Enter custom type..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <div class="flex space-x-2 mt-2">
+                                        <button type="button" onclick="addCustomType()" class="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                                            <i class="fas fa-check mr-1"></i>Add
+                                        </button>
+                                        <button type="button" onclick="cancelCustomType()" class="px-3 py-1 border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-100">
+                                            <i class="fas fa-times mr-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Stream URL</label>
@@ -163,6 +326,111 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Metadata Configuration -->
+                    <div class="bg-cyan-50 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <i class="fas fa-music text-cyan-600 mr-2"></i>
+                            Metadata Configuration
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Metadata API URL</label>
+                                <input type="url" id="edit-metadata-url" placeholder="https://api.example.com/nowplaying" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Metadata Type</label>
+                                    <select id="edit-metadata-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                        <option value="">Select type...</option>
+                                        <option value="custom-api">Custom API</option>
+                                        <option value="icecast-json">Icecast JSON</option>
+                                        <option value="icecast-xml">Icecast XML</option>
+                                        <option value="shoutcast">Shoutcast</option>
+                                        <option value="socast">SoCast</option>
+                                        <option value="onlineradiobox">OnlineRadioBox</option>
+                                        <option value="rogers-auto">Rogers Auto (JSON Mapping)</option>
+                                        <option value="radio-co">Radio.co</option>
+                                        <option value="laut-fm">Laut.fm</option>
+                                        <option value="website-scrape">Website Scraping</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Response Format</label>
+                                    <select id="edit-metadata-format" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                        <option value="">Auto-detect</option>
+                                        <option value="json">JSON</option>
+                                        <option value="xml">XML</option>
+                                        <option value="html">HTML</option>
+                                        <option value="jsonp">JSONP</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Custom Field Mapping (JSON)</label>
+                                <textarea id="edit-metadata-fields" rows="3" placeholder='{"title": "song.name", "artist": "artist.name"}' class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-mono text-sm"></textarea>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="testMetadataUrl()" class="px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm">
+                                    <i class="fas fa-play mr-1"></i>Test URL
+                                </button>
+                                <button onclick="discoverMetadataUrls()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
+                                    <i class="fas fa-search mr-1"></i>Discover URLs
+                                </button>
+                                <button onclick="openMetadataDiscovery()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
+                                    <i class="fas fa-external-link-alt mr-1"></i>Open Discovery Tool
+                                </button>
+                            </div>
+                            <div id="metadata-test-results" class="hidden">
+                                <div class="text-sm font-medium text-gray-700 mb-2">Test Results:</div>
+                                <div id="metadata-test-content" class="bg-white border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                                    <div class="text-sm text-gray-600"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quality & Curation -->
+                    <div class="bg-indigo-50 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <i class="fas fa-star text-indigo-600 mr-2"></i>
+                            Quality & Curation
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Quality Score</label>
+                                <div class="flex items-center space-x-3">
+                                    <input type="number" id="edit-quality-score" min="0" max="100" step="0.1" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <div class="flex items-center">
+                                        <span class="text-sm text-gray-500 mr-2">/ 100</span>
+                                        <button type="button" onclick="recalculateQualityScore()" class="px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                            <i class="fas fa-calculator mr-1"></i>Calc
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="edit-editors-pick" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="ml-2 text-sm text-gray-700">Editor's Pick</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="edit-featured" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="ml-2 text-sm text-gray-700">Featured</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="edit-is-active" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right Column -->
@@ -181,11 +449,17 @@
                                     <button type="button" onclick="useHomepageUrl()" class="px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm">
                                         <i class="fas fa-home mr-1"></i>Use Homepage
                                     </button>
+                                    <button type="button" onclick="findGoogleBusiness()" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm" id="find-google-btn">
+                                        <i class="fas fa-search mr-1"></i>Find Business
+                                    </button>
                                 </div>
                                 <div class="text-xs text-gray-500 mt-1">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Will automatically scrape both this URL and the station's homepage (if different) and merge the data
+                                    <i class="fas fa-map-marker-alt mr-1"></i>
+                                    Click "Find Business" to open Google Maps search in a new window
                                 </div>
+                                
+                                <!-- Google Search Instructions -->
+                                <div id="google-search-instructions" class="hidden"></div>
                             </div>
                             <div class="flex space-x-2">
                                 <button onclick="autoScrapeData()" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
@@ -284,24 +558,83 @@
                         </div>
                     </div>
 
-                    <!-- Auto-Normalization -->
+                    <!-- Station Analysis -->
                     <div class="bg-purple-50 rounded-xl p-6">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-wand-magic-sparkles text-purple-600 mr-2"></i>
-                            Auto-Normalization
+                            <i class="fas fa-brain text-purple-600 mr-2"></i>
+                            Smart Analysis
                         </h3>
                         <div class="space-y-4">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="auto-normalize" class="rounded border-gray-300 text-purple-600 focus:ring-purple-500" checked>
-                                <span class="ml-2 text-sm text-gray-700">Auto-normalize genre and type</span>
-                            </label>
-                            <div id="normalization-suggestions" class="space-y-2 hidden">
-                                <div class="text-sm text-gray-600">Suggestions:</div>
+                            <div class="flex space-x-2">
+                                <button onclick="analyzeStation()" id="analyze-btn" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                                    <i class="fas fa-search mr-2"></i>Analyze Station
+                                </button>
+                                <button onclick="testStreamConnectivity()" id="test-stream-btn" class="px-4 py-2 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
+                                    <i class="fas fa-satellite-dish mr-2"></i>Test Stream
+                                </button>
+                            </div>
+                            
+                            <!-- Analysis Results Panel -->
+                            <div id="analysis-results" class="hidden space-y-3">
+                                <div class="text-sm font-medium text-gray-700 mb-2">Analysis Results:</div>
+                                
+                                <!-- Genres -->
+                                <div id="suggested-genres" class="hidden">
+                                    <div class="text-xs text-gray-600 mb-1">Suggested Genres:</div>
+                                    <div class="flex flex-wrap gap-2" id="genre-suggestions"></div>
+                                </div>
+                                
+                                <!-- Subgenres -->
+                                <div id="suggested-subgenres" class="hidden">
+                                    <div class="text-xs text-gray-600 mb-1">Suggested Subgenres:</div>
+                                    <div class="flex flex-wrap gap-2" id="subgenre-suggestions"></div>
+                                </div>
+                                
+                                <!-- Types -->
+                                <div id="suggested-types" class="hidden">
+                                    <div class="text-xs text-gray-600 mb-1">Suggested Types:</div>
+                                    <div class="flex flex-wrap gap-2" id="type-suggestions"></div>
+                                </div>
+                                
+                                <!-- Tags -->
+                                <div id="suggested-tags" class="hidden">
+                                    <div class="text-xs text-gray-600 mb-1">Suggested Tags:</div>
+                                    <div class="flex flex-wrap gap-2" id="tag-suggestions"></div>
+                                </div>
+                                
+                                <!-- Confidence and Sources -->
+                                <div class="text-xs text-gray-500 mt-2">
+                                    <span id="analysis-confidence"></span>
+                                    <span id="analysis-sources" class="ml-2"></span>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex space-x-2 mt-3">
+                                    <button onclick="applyAllSuggestions()" class="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700">
+                                        <i class="fas fa-check mr-1"></i>Apply All
+                                    </button>
+                                    <button onclick="clearAnalysisResults()" class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-100">
+                                        <i class="fas fa-times mr-1"></i>Clear
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Normalization Suggestions -->
+                            <div id="normalization-suggestions" class="hidden">
+                                <div class="text-sm font-medium text-gray-700 mb-2">Normalization Suggestions:</div>
                                 <div id="genre-suggestion" class="text-sm"></div>
                                 <div id="type-suggestion" class="text-sm"></div>
-                                <button onclick="applyNormalizationSuggestions()" class="mt-2 px-3 py-1 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700">
-                                    Apply Suggestions
-                                </button>
+                                <div class="flex space-x-2 mt-2">
+                                    <button onclick="applyNormalizationSuggestions()" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+                                        <i class="fas fa-check mr-1"></i>Apply Suggestions
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Stream Test Results -->
+                            <div id="stream-test-results" class="hidden">
+                                <div class="text-sm font-medium text-gray-700 mb-2">Stream Test Results:</div>
+                                <div id="stream-test-status" class="text-sm"></div>
                             </div>
                         </div>
                     </div>
@@ -353,3 +686,5 @@
         </div>
     </div>
 </div>
+
+<!-- Modules are loaded dynamically by station-editor.js -->

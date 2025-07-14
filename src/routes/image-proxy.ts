@@ -69,6 +69,13 @@ router.get('/proxy', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
+    // Validate content type before processing
+    let contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
+      console.warn(`Invalid content type for image URL ${url}: ${contentType}`);
+      return res.status(400).json({ error: 'URL does not point to an image' });
+    }
+
     // Check content length to prevent huge downloads
     const contentLength = response.headers.get('content-length');
     if (contentLength && parseInt(contentLength) > 2 * 1024 * 1024) { // 2MB limit
@@ -83,9 +90,6 @@ router.get('/proxy', async (req: Request, res: Response) => {
       return res.status(413).json({ error: 'Image too large' });
     }
 
-    // Get content type
-    let contentType = response.headers.get('content-type') || 'image/jpeg';
-
     // Optimize image with Sharp if parameters provided
     const width = w ? parseInt(w as string) : undefined;
     const height = h ? parseInt(h as string) : undefined;
@@ -93,7 +97,13 @@ router.get('/proxy', async (req: Request, res: Response) => {
 
     if (width || height || quality !== 80) {
       try {
+        // Validate image format before processing
         let sharpImage = sharp(imageBuffer);
+        const metadata = await sharpImage.metadata();
+        
+        if (!metadata.format) {
+          throw new Error('Unsupported image format');
+        }
 
         // Resize if dimensions provided
         if (width || height) {
@@ -113,7 +123,8 @@ router.get('/proxy', async (req: Request, res: Response) => {
           contentType = 'image/jpeg';
         }
       } catch (error) {
-        console.warn('Image optimization failed, serving original:', error);
+        console.warn(`Image optimization failed for ${url}:`, error.message);
+        // Return the original image without processing
       }
     }
 

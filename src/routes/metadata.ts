@@ -83,7 +83,16 @@ router.get('/:stationId', async (req: Request, res: Response) => {
     console.log(`🔍 Found station "${station.name}" with stream URL: ${station.streamUrl}`);
     
     // Try local metadata server first if configured
-    const localMetadataUrl = process.env.LOCAL_METADATA_URL;
+    // Auto-detect environment and use appropriate URL
+    let localMetadataUrl = process.env.LOCAL_METADATA_URL;
+    
+    // If running locally (development), use localhost
+    if (process.env.NODE_ENV === 'development' || process.env.RENDER !== 'true') {
+      localMetadataUrl = 'http://localhost:3002';
+      console.log(`🏠 Detected local environment, using localhost metadata server`);
+    } else {
+      console.log(`☁️ Detected production environment, using DDNS metadata server: ${localMetadataUrl}`);
+    }
     if (localMetadataUrl) {
       try {
         console.log(`🏠 Trying local metadata server: ${localMetadataUrl}/metadata/${stationId}`);

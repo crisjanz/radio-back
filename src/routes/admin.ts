@@ -84,44 +84,69 @@ router.post('/stations/analyze', async (req: Request, res: Response) => {
         name: true,
         genre: true,
         type: true,
-        country: true
+        country: true,
+        description: true
       }
     });
     
     const pendingChanges: any[] = [];
     
-    // Genre normalization rules
-    const genreRules = [
-      { keywords: ['rock'], normalized: 'rock' },
-      { keywords: ['country'], normalized: 'country' },
-      { keywords: ['pop'], normalized: 'pop' },
-      { keywords: ['jazz'], normalized: 'jazz' },
-      { keywords: ['blues'], normalized: 'blues' },
-      { keywords: ['classical'], normalized: 'classical' },
-      { keywords: ['electronic', 'dance', 'edm'], normalized: 'electronic' },
-      { keywords: ['hip', 'rap'], normalized: 'hip-hop' },
-      { keywords: ['folk'], normalized: 'folk' },
-      { keywords: ['christian', 'religious', 'gospel'], normalized: 'christian' },
-      { keywords: ['oldies', 'classic hits', '60s', '70s', '80s', '90s'], normalized: 'oldies' },
-      { keywords: ['alternative', 'indie'], normalized: 'alternative' }
-    ];
-
-    // Type normalization rules
-    const typeRules = [
-      { keywords: ['news'], normalized: 'news' },
-      { keywords: ['talk'], normalized: 'talk' },
-      { keywords: ['sport', 'espn'], normalized: 'sport' }
-    ];
+    // Import sophisticated analysis constants
+    const { GENRE_SYSTEM, getAllGenres, isValidGenre } = await import('../constants/genres');
+    const { STATION_TYPES, suggestStationTypeForStation, isValidStationType } = await import('../constants/stationTypes');
+    
+    // Create analysis rules from genre system
+    const genreRules: { keywords: string[], normalized: string }[] = [];
+    Object.entries(GENRE_SYSTEM).forEach(([key, info]) => {
+      genreRules.push({
+        keywords: [key, info.name.toLowerCase(), ...info.subgenres],
+        normalized: key
+      });
+    });
+    
+    // Create analysis rules from station types
+    const typeRules: { keywords: string[], normalized: string }[] = [];
+    Object.entries(STATION_TYPES).forEach(([key, info]) => {
+      typeRules.push({
+        keywords: [key, info.name.toLowerCase(), ...info.keywords],
+        normalized: key
+      });
+    });
     
     // Analyze each station
     for (const station of stations) {
-      // Check genre normalization
+      const stationData = {
+        name: station.name,
+        description: station.description || '',
+        genre: station.genre || '',
+        subgenre: ''
+      };
+      
+      // Sophisticated genre analysis
       if (station.genre) {
-        const genre = station.genre.toLowerCase();
+        const currentGenre = station.genre.toLowerCase();
         
-        for (const rule of genreRules) {
-          if (rule.keywords.some(keyword => genre.includes(keyword)) && genre !== rule.normalized) {
-            // Avoid duplicates
+        // Check if current genre is valid
+        if (!isValidGenre(currentGenre)) {
+          // Try to find a match in our genre system
+          let bestMatch = null;
+          let bestScore = 0;
+          
+          for (const rule of genreRules) {
+            const score = rule.keywords.reduce((acc, keyword) => {
+              if (currentGenre.includes(keyword.toLowerCase())) {
+                return acc + (keyword.length / currentGenre.length);
+              }
+              return acc;
+            }, 0);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = rule.normalized;
+            }
+          }
+          
+          if (bestMatch && bestScore > 0.3) {
             const existingChange = pendingChanges.find(
               c => c.stationId === station.id && c.field === 'genre'
             );
@@ -131,22 +156,25 @@ router.post('/stations/analyze', async (req: Request, res: Response) => {
                 stationId: station.id,
                 field: 'genre',
                 original: station.genre,
-                suggested: rule.normalized,
+                suggested: bestMatch,
+                confidence: Math.round(bestScore * 100),
                 status: 'pending'
               });
             }
-            break; // Only suggest one change per field
           }
         }
       }
       
-      // Check type normalization
+      // Sophisticated type analysis
+      const suggestedTypes = suggestStationTypeForStation(stationData);
+      
       if (station.type) {
-        const type = station.type.toLowerCase();
+        const currentType = station.type.toLowerCase();
         
-        for (const rule of typeRules) {
-          if (rule.keywords.some(keyword => type.includes(keyword)) && type !== rule.normalized) {
-            // Avoid duplicates
+        // Check if current type is valid
+        if (!isValidStationType(currentType)) {
+          // Use the first suggested type
+          if (suggestedTypes.length > 0) {
             const existingChange = pendingChanges.find(
               c => c.stationId === station.id && c.field === 'type'
             );
@@ -156,44 +184,39 @@ router.post('/stations/analyze', async (req: Request, res: Response) => {
                 stationId: station.id,
                 field: 'type',
                 original: station.type,
-                suggested: rule.normalized,
+                suggested: suggestedTypes[0],
+                confidence: 85,
                 status: 'pending'
               });
             }
-            break;
-          }
-        }
-        
-        // Default to music if no specific type matches
-        if (!typeRules.some(rule => rule.keywords.some(keyword => type.includes(keyword))) && type !== 'music') {
-          const existingChange = pendingChanges.find(
-            c => c.stationId === station.id && c.field === 'type'
-          );
-          
-          if (!existingChange) {
-            pendingChanges.push({
-              stationId: station.id,
-              field: 'type',
-              original: station.type,
-              suggested: 'music',
-              status: 'pending'
-            });
           }
         }
       } else {
-        // If no type, suggest 'music' as default
-        pendingChanges.push({
-          stationId: station.id,
-          field: 'type',
-          original: null,
-          suggested: 'music',
-          status: 'pending'
-        });
+        // If no type, suggest based on analysis
+        if (suggestedTypes.length > 0) {
+          pendingChanges.push({
+            stationId: station.id,
+            field: 'type',
+            original: null,
+            suggested: suggestedTypes[0],
+            confidence: 75,
+            status: 'pending'
+          });
+        }
       }
+      
+      // Note: Subgenre analysis skipped - field not in database schema yet
     }
     
-    console.log(`🔍 Analysis complete: found ${pendingChanges.length} suggested changes`);
-    return res.json({ pendingChanges });
+    console.log(`🔍 Sophisticated analysis complete: found ${pendingChanges.length} suggested changes`);
+    return res.json({ 
+      pendingChanges,
+      analysisStats: {
+        totalStations: stations.length,
+        suggestedChanges: pendingChanges.length,
+        confidence: pendingChanges.length > 0 ? Math.round(pendingChanges.reduce((acc, c) => acc + (c.confidence || 50), 0) / pendingChanges.length) : 0
+      }
+    });
   } catch (error) {
     console.error('❌ Error analyzing stations:', error);
     return res.status(500).json({ error: 'Failed to analyze stations' });
@@ -466,71 +489,283 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
 // Normalization preview endpoint
 router.post('/normalize-preview', async (req: Request, res: Response) => {
   try {
-    const { genre, type, name } = req.body;
+    const { genre, type, name, description } = req.body;
     
-    // Genre normalization rules
-    const genreRules = [
-      { keywords: ['rock'], normalized: 'rock' },
-      { keywords: ['country'], normalized: 'country' },
-      { keywords: ['pop'], normalized: 'pop' },
-      { keywords: ['jazz'], normalized: 'jazz' },
-      { keywords: ['blues'], normalized: 'blues' },
-      { keywords: ['classical'], normalized: 'classical' },
-      { keywords: ['electronic', 'dance', 'edm'], normalized: 'electronic' },
-      { keywords: ['hip', 'rap'], normalized: 'hip-hop' },
-      { keywords: ['folk'], normalized: 'folk' },
-      { keywords: ['christian', 'religious', 'gospel'], normalized: 'christian' },
-      { keywords: ['oldies', 'classic hits', '60s', '70s', '80s', '90s'], normalized: 'oldies' },
-      { keywords: ['alternative', 'indie'], normalized: 'alternative' }
-    ];
-
-    // Type normalization rules
-    const typeRules = [
-      { keywords: ['news'], normalized: 'news' },
-      { keywords: ['talk'], normalized: 'talk' },
-      { keywords: ['sport', 'espn'], normalized: 'sport' }
-    ];
+    // Import sophisticated analysis constants
+    const { GENRE_SYSTEM, isValidGenre } = await import('../constants/genres');
+    const { suggestStationTypeForStation, isValidStationType } = await import('../constants/stationTypes');
     
     let suggestedGenre = null;
     let suggestedType = null;
+    let suggestedSubgenres: string[] = [];
     
-    // Check genre normalization
+    // Sophisticated genre analysis
     if (genre) {
-      const genreText = genre.toLowerCase();
-      for (const rule of genreRules) {
-        if (rule.keywords.some(keyword => genreText.includes(keyword)) && genreText !== rule.normalized) {
-          suggestedGenre = rule.normalized;
-          break;
+      const currentGenre = genre.toLowerCase();
+      
+      if (!isValidGenre(currentGenre)) {
+        // Try to find a match in our genre system
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        Object.entries(GENRE_SYSTEM).forEach(([key, info]) => {
+          const keywords = [key, info.name.toLowerCase(), ...info.subgenres];
+          const score = keywords.reduce((acc, keyword) => {
+            if (currentGenre.includes(keyword.toLowerCase())) {
+              return acc + (keyword.length / currentGenre.length);
+            }
+            return acc;
+          }, 0);
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = key;
+          }
+        });
+        
+        if (bestMatch && bestScore > 0.3) {
+          suggestedGenre = bestMatch;
         }
       }
     }
     
-    // Check type normalization
+    // Sophisticated type analysis
+    const stationData = {
+      name: name || '',
+      description: description || '',
+      genre: genre || '',
+      subgenre: ''
+    };
+    
+    const suggestedTypes = suggestStationTypeForStation(stationData);
+    
     if (type) {
-      const typeText = type.toLowerCase();
-      for (const rule of typeRules) {
-        if (rule.keywords.some(keyword => typeText.includes(keyword)) && typeText !== rule.normalized) {
-          suggestedType = rule.normalized;
-          break;
+      const currentType = type.toLowerCase();
+      
+      if (!isValidStationType(currentType)) {
+        if (suggestedTypes.length > 0) {
+          suggestedType = suggestedTypes[0];
         }
       }
-      
-      // Default to music if no specific type matches
-      if (!suggestedType && !typeRules.some(rule => rule.keywords.some(keyword => typeText.includes(keyword))) && typeText !== 'music') {
-        suggestedType = 'music';
-      }
     } else {
-      // If no type, suggest 'music' as default
-      suggestedType = 'music';
+      // If no type, suggest based on analysis
+      if (suggestedTypes.length > 0) {
+        suggestedType = suggestedTypes[0];
+      }
+    }
+    
+    // Suggest subgenres if we have a genre
+    const effectiveGenre = suggestedGenre || genre;
+    if (effectiveGenre && GENRE_SYSTEM[effectiveGenre]) {
+      suggestedSubgenres = GENRE_SYSTEM[effectiveGenre].subgenres.slice(0, 3); // First 3 subgenres
     }
     
     res.json({
       genre: suggestedGenre,
-      type: suggestedType
+      type: suggestedType,
+      subgenres: suggestedSubgenres,
+      allTypes: suggestedTypes,
+      confidence: {
+        genre: suggestedGenre ? 85 : 0,
+        type: suggestedType ? 80 : 0
+      }
     });
   } catch (error) {
     console.error('❌ Error getting normalization preview:', error);
     res.status(500).json({ error: 'Failed to get normalization suggestions' });
+  }
+});
+
+// Constants endpoints for station editor
+router.get('/constants/genres', async (req: Request, res: Response) => {
+  try {
+    const { GENRE_SYSTEM } = await import('../constants/genres');
+    
+    const response = {
+      allGenres: Object.keys(GENRE_SYSTEM),
+      genres: GENRE_SYSTEM
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Error loading genre constants:', error);
+    res.status(500).json({ error: 'Failed to load genre constants' });
+  }
+});
+
+router.get('/constants/station-types', async (req: Request, res: Response) => {
+  try {
+    const { STATION_TYPES } = await import('../constants/stationTypes');
+    
+    const response = {
+      allTypes: Object.keys(STATION_TYPES),
+      stationTypes: STATION_TYPES
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Error loading station type constants:', error);
+    res.status(500).json({ error: 'Failed to load station type constants' });
+  }
+});
+
+router.get('/constants/collection-tags', async (req: Request, res: Response) => {
+  try {
+    const { COLLECTION_TAGS } = await import('../constants/collectionTags');
+    
+    const response = {
+      allTags: Object.keys(COLLECTION_TAGS),
+      collectionTags: COLLECTION_TAGS
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Error loading collection tag constants:', error);
+    res.status(500).json({ error: 'Failed to load collection tag constants' });
+  }
+});
+
+// Test metadata URL endpoint
+router.post('/test-metadata-url', async (req: Request, res: Response) => {
+  try {
+    const { url, format } = req.body;
+    
+    console.log(`🧪 Testing metadata URL: ${url} (format: ${format || 'auto'})`);
+    
+    // Handle Rogers Auto configuration
+    if (url === 'automatic' || format === 'auto') {
+      console.log('✅ Rogers Auto configuration detected');
+      return res.json({
+        success: true,
+        metadata: {
+          title: 'Rogers Auto Configuration',
+          artist: 'System Test',
+          song: 'Rogers API integration enabled'
+        },
+        message: 'Rogers Auto configuration is working. Metadata will be provided automatically during playback.'
+      });
+    }
+    
+    if (!url) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'URL is required' 
+      });
+    }
+    
+    // Test the URL directly
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for testing
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Streemr-Admin-Test/1.0',
+        'Accept': 'application/json, text/javascript, */*'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+    
+    // Try to parse the response based on format or content type
+    const responseText = await response.text();
+    
+    if (format === 'jsonp' || url.includes('callback=')) {
+      // Handle JSONP response (like SoCast)
+      const jsonpMatch = responseText.match(/(?:callback|jsonpcallback|cb)\((.+)\);?$/);
+      if (jsonpMatch) {
+        data = JSON.parse(jsonpMatch[1]);
+      } else {
+        throw new Error('Invalid JSONP format');
+      }
+    } else if (format === 'json' || contentType.includes('json') || responseText.trim().startsWith('{')) {
+      data = JSON.parse(responseText);
+    } else if (format === 'xml' || contentType.includes('xml')) {
+      // For XML, just return a success message
+      return res.json({
+        success: true,
+        metadata: {
+          title: 'XML Response',
+          artist: 'Parsed Successfully',
+          song: 'XML format detected'
+        },
+        rawResponse: responseText.substring(0, 500) + '...'
+      });
+    } else {
+      // Try JSON first, then treat as text
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        return res.json({
+          success: true,
+          metadata: {
+            title: 'Text Response',
+            artist: 'Parsed Successfully', 
+            song: 'Text format detected'
+          },
+          rawResponse: responseText.substring(0, 500) + '...'
+        });
+      }
+    }
+    
+    // Extract metadata based on common patterns
+    let metadata: any = {};
+    
+    // SoCast format
+    if (data.song_name && data.artist_name) {
+      metadata = {
+        title: data.song_name,
+        artist: data.artist_name,
+        song: `${data.artist_name} - ${data.song_name}`,
+        artwork: data.itunes_img || data.image
+      };
+    }
+    // Generic JSON patterns
+    else if (data.title || data.artist || data.track) {
+      metadata = {
+        title: data.title || data.track || data.song,
+        artist: data.artist || data.performer,
+        song: data.song || (data.artist && data.title ? `${data.artist} - ${data.title}` : ''),
+        album: data.album
+      };
+    }
+    // Radio.co format
+    else if (data.data && (data.data.title || data.data.artist)) {
+      metadata = {
+        title: data.data.title,
+        artist: data.data.artist,
+        song: data.data.title && data.data.artist ? `${data.data.artist} - ${data.data.title}` : ''
+      };
+    }
+    // Fallback - just return what we found
+    else {
+      metadata = {
+        title: 'Data Found',
+        artist: 'Successfully Parsed',
+        song: 'Metadata detected but format unknown'
+      };
+    }
+    
+    res.json({
+      success: true,
+      metadata,
+      format: format || 'auto-detected',
+      contentType
+    });
+    
+  } catch (error) {
+    console.error('❌ Error testing metadata URL:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

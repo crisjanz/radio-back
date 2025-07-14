@@ -359,19 +359,18 @@ async function loadStationEditorModal() {
         
         console.log(`📄 Modal HTML loaded: ${modalHTML.length} characters`);
         
-        // Create a temporary container and clone the modal
+        // Create a temporary container and add all HTML content
         const tempContainer = document.createElement('div');
         tempContainer.innerHTML = modalHTML;
         
-        // Get the modal element
-        const modalElement = tempContainer.firstElementChild;
-        if (!modalElement) {
-            throw new Error('No modal element found in HTML');
+        // Append all children (styles, scripts, and modal) to the document
+        while (tempContainer.firstChild) {
+            if (tempContainer.firstChild.nodeType === Node.ELEMENT_NODE) {
+                document.body.appendChild(tempContainer.firstChild);
+            } else {
+                tempContainer.removeChild(tempContainer.firstChild);
+            }
         }
-        
-        // Clone and append to body
-        const clonedModal = modalElement.cloneNode(true);
-        document.body.appendChild(clonedModal);
         
         // Small delay to ensure DOM is updated
         await new Promise(resolve => setTimeout(resolve, 100));
