@@ -839,7 +839,7 @@
                     console.log(`✅ Stage 1 complete: Station created with ID ${savedStation.id}`);
                     
                     // Stage 2: Open editor with the saved station (now has ID)
-editStationForImport(savedStation);
+await editStationForImport(savedStation);
                     
                     // Mark as imported in UI
                     markStationAsImported(index, station.stationuuid);
@@ -857,7 +857,7 @@ editStationForImport(savedStation);
             }
         }
 
-        function editStationForImport(stationData) {
+        async function editStationForImport(stationData) {
             // Debug: Log all elements with 'editor-' IDs
             const allEditorElements = document.querySelectorAll('[id*="editor-"]');
             console.log('🔍 All editor elements found:', allEditorElements.length);
@@ -890,8 +890,17 @@ editStationForImport(savedStation);
             currentEditingStation = stationData;
             originalStationData = { ...stationData };
             
-            // Load genre constants before populating
-            await genreManager.loadConstants();
+            // Wait for modules to load, then populate
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Try to load genre constants if available
+            try {
+                if (typeof window.genreManager !== 'undefined' && window.genreManager.loadConstants) {
+                    await window.genreManager.loadConstants();
+                }
+            } catch (error) {
+                console.warn('Could not load genre constants:', error);
+            }
             
             // Populate the editor with the data
             populateStationEditor(stationData);
