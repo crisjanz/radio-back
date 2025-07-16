@@ -370,6 +370,7 @@ router.get('/preview', async (req: Request, res: Response) => {
       state = '',
       minVotes = '0',
       minBitrate = '0',
+      stationType = '',
       hasGeo = 'false',
       hidebroken = 'true',
       order = 'clickcount',
@@ -377,7 +378,7 @@ router.get('/preview', async (req: Request, res: Response) => {
     } = req.query;
 
     const params = new URLSearchParams({
-      limit: limit.toString(),
+      // No limit - fetch complete Radio Browser database (~53k stations)
       hidebroken: hidebroken.toString(),
       order: order.toString(),
       reverse: 'true'
@@ -398,39 +399,50 @@ router.get('/preview', async (req: Request, res: Response) => {
     }
 
     const allStations = await response.json() as any[];
+    console.log(`📡 Radio Browser API returned ${allStations.length} stations`);
     
     // Apply client-side filtering since Radio Browser API filters don't work reliably
     let filteredStations = allStations;
     
-    // Filter out broken streams (keep only working ones)
+    // Filter out broken streams (keep only working ones) - but be less strict
+    const beforeBrokenFilter = filteredStations.length;
     filteredStations = filteredStations.filter(station => 
-      station.lastcheckok === 1
+      station.lastcheckok === 1 || station.lastcheckok === undefined
     );
+    console.log(`🔧 After broken filter: ${beforeBrokenFilter} -> ${filteredStations.length} stations`);
     
     // Apply minimum votes filter
     const minVotesNum = parseInt(minVotes.toString());
     if (minVotesNum > 0) {
+      const beforeVotes = filteredStations.length;
       filteredStations = filteredStations.filter(station => 
         (station.votes || 0) >= minVotesNum
       );
+      console.log(`🗳️ After votes filter (>=${minVotesNum}): ${beforeVotes} -> ${filteredStations.length} stations`);
     }
     
     // Apply minimum bitrate filter
     const minBitrateNum = parseInt(minBitrate.toString());
     if (minBitrateNum > 0) {
+      const beforeBitrate = filteredStations.length;
       filteredStations = filteredStations.filter(station => 
         (station.bitrate || 0) >= minBitrateNum
       );
+      console.log(`🎵 After bitrate filter (>=${minBitrateNum}): ${beforeBitrate} -> ${filteredStations.length} stations`);
     }
     
     // Apply geo filter
     if (hasGeo === 'true') {
+      const beforeGeo = filteredStations.length;
       filteredStations = filteredStations.filter(station => 
         station.geo_lat && station.geo_long
       );
+      console.log(`🌍 After geo filter: ${beforeGeo} -> ${filteredStations.length} stations`);
     }
     
-    console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations`);
+    // Station type filtering moved to client-side for better performance
+    
+    console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations (type: ${stationType || 'all'})`);
     
     return res.json({ stations: filteredStations });
   } catch (error) {

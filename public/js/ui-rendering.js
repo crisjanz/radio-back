@@ -60,12 +60,17 @@ function createStationRow(station) {
                               '<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fas fa-radio text-lg"></i></div>'}
                         </div>
                         <div>
-                            <h3 class="font-medium text-gray-900">${station.name}</h3>
+                            <h3 class="font-medium ${station.isActive === false ? 'text-gray-500' : 'text-gray-900'}">${station.name}${station.isActive === false ? ' <span class="text-red-500 text-xs">(Inactive)</span>' : ''}</h3>
                             <p class="text-sm text-gray-600">${station.country || 'Unknown'}</p>
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
                         <span class="health-indicator health-gray" title="Health status unknown"></span>
+                        <select onchange="updateStationStatus(${station.id}, this.value)" 
+                                class="px-2 py-1 border border-gray-300 text-sm rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="true" ${station.isActive !== false ? 'selected' : ''}>Active</option>
+                            <option value="false" ${station.isActive === false ? 'selected' : ''}>Inactive</option>
+                        </select>
                         <button onclick="editStation(${station.id})" 
                                 class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
                             Edit
@@ -94,7 +99,7 @@ function createStationRow(station) {
                     </div>
                 </div>
                 <div class="col-span-3">
-                    <h3 class="font-medium text-gray-900 truncate">${station.name}</h3>
+                    <h3 class="font-medium ${station.isActive === false ? 'text-gray-500' : 'text-gray-900'} truncate">${station.name}${station.isActive === false ? ' <span class="text-red-500 text-xs">(Inactive)</span>' : ''}</h3>
                     <p class="text-sm text-gray-600 truncate">${station.bitrate ? `${station.bitrate} kbps` : 'Unknown bitrate'}</p>
                 </div>
                 <div class="col-span-2">
@@ -112,14 +117,14 @@ function createStationRow(station) {
                 </div>
                 <div class="col-span-2">
                     <div class="flex space-x-2">
+                        <select onchange="updateStationStatus(${station.id}, this.value)" 
+                                class="px-2 py-1 border border-gray-300 text-sm rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="true" ${station.isActive !== false ? 'selected' : ''}>Active</option>
+                            <option value="false" ${station.isActive === false ? 'selected' : ''}>Inactive</option>
+                        </select>
                         <button onclick="editStation(${station.id})" 
                                 class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
                             <i class="fas fa-edit mr-1"></i>Edit
-                        </button>
-                        <button onclick="testStream(${station.id})" 
-                                class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors"
-                                title="Test stream">
-                            <i class="fas fa-play"></i>
                         </button>
                     </div>
                 </div>

@@ -83,6 +83,9 @@
                 <button onclick="saveStation()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                     <i class="fas fa-save mr-2"></i>Save Changes
                 </button>
+                <button onclick="deleteStation()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" id="delete-station-btn">
+                    <i class="fas fa-trash mr-2"></i>Delete
+                </button>
                 <button onclick="closeStationEditor()" class="p-2 text-gray-400 hover:text-gray-600 transition-colors">
                     <i class="fas fa-times text-lg"></i>
                 </button>
@@ -673,6 +676,9 @@
                 Station ID: <span id="editor-station-id">-</span>
             </div>
             <div class="flex space-x-3">
+                <button onclick="deleteStation()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" id="delete-station-btn-footer">
+                    <i class="fas fa-trash mr-2"></i>Delete Station
+                </button>
                 <button onclick="resetStationForm()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
                     <i class="fas fa-undo mr-2"></i>Reset
                 </button>

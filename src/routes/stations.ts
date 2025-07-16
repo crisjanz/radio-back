@@ -42,13 +42,18 @@ router.get('/', async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 100;
     const skip = (page - 1) * limit;
 
+    // Filter by active status (default: only active stations)
+    const showInactive = req.query.includeInactive === 'true';
+    const whereClause = showInactive ? {} : { isActive: true };
+
     const [stations, total] = await Promise.all([
       prisma.station.findMany({
+        where: whereClause,
         skip,
         take: limit,
         orderBy: { id: 'asc' }
       }),
-      prisma.station.count()
+      prisma.station.count({ where: whereClause })
     ]);
 
     // If pagination is requested, return paginated format
@@ -62,8 +67,8 @@ router.get('/', async (req: Request, res: Response) => {
       });
       return;
     } else {
-      // Return all stations for backward compatibility
-      const allStations = await prisma.station.findMany();
+      // Return all stations for backward compatibility (filtered by active status)
+      const allStations = await prisma.station.findMany({ where: whereClause });
       res.json(allStations);
       return;
     }
@@ -87,8 +92,13 @@ router.get('/search', async (req: Request, res: Response) => {
     const searchTerm = query.trim();
     console.log(`🔍 Searching stations for: "${searchTerm}"`);
 
+    // Filter by active status for search too
+    const showInactive = req.query.includeInactive === 'true';
+    const activeFilter = showInactive ? {} : { isActive: true };
+
     const stations = await prisma.station.findMany({
       where: {
+        ...activeFilter,
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },
           { country: { contains: searchTerm, mode: 'insensitive' } },

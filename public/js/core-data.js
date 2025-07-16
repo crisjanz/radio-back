@@ -10,6 +10,8 @@ let selectedStations = new Set();
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize current active filter
+    window.currentActiveFilter = 'active';
     loadStations();
     setupEventListeners();
 });
@@ -19,7 +21,7 @@ function setupEventListeners() {
     document.getElementById('search-input').addEventListener('input', debounce(filterStations, 300));
     
     // Filter dropdowns
-    ['filter-country', 'filter-genre', 'filter-type', 'filter-image'].forEach(id => {
+    ['filter-country', 'filter-genre', 'filter-type', 'filter-image', 'filter-active'].forEach(id => {
         document.getElementById(id).addEventListener('change', filterStations);
     });
 
@@ -31,7 +33,12 @@ function setupEventListeners() {
 async function loadStations() {
     try {
         console.log('Loading stations...');
-        const response = await fetch('/stations');
+        
+        // Check if we should include inactive stations
+        const activeFilter = document.getElementById('filter-active')?.value || 'active';
+        const includeInactive = activeFilter === 'all' ? 'true' : 'false';
+        
+        const response = await fetch(`/stations?includeInactive=${includeInactive}`);
         console.log('Response status:', response.status);
         if (response.ok) {
             stations = await response.json();
@@ -103,14 +110,24 @@ function filterStations() {
     const genreFilter = document.getElementById('filter-genre').value;
     const typeFilter = document.getElementById('filter-type').value;
     const imageFilter = document.getElementById('filter-image').value;
+    const activeFilter = document.getElementById('filter-active').value;
 
     console.log('Filtering stations with:', {
         searchTerm,
         countryFilter,
         genreFilter,
         typeFilter,
-        imageFilter
+        imageFilter,
+        activeFilter
     });
+
+    // If active filter changed, reload stations from server
+    const currentActiveFilter = window.currentActiveFilter || 'active';
+    if (activeFilter !== currentActiveFilter) {
+        window.currentActiveFilter = activeFilter;
+        loadStations();
+        return;
+    }
 
     filteredStations = stations.filter(station => {
         const matchesSearch = !searchTerm || [
@@ -124,7 +141,12 @@ function filterStations() {
             (imageFilter === 'has-image' && station.faviconUrl) ||
             (imageFilter === 'no-image' && !station.faviconUrl);
 
-        return matchesSearch && matchesCountry && matchesGenre && matchesType && matchesImage;
+        // Active status filtering (client-side for "inactive only" when we have all stations)
+        const matchesActive = activeFilter === 'all' || 
+            (activeFilter === 'active' && station.isActive !== false) ||
+            (activeFilter === 'inactive' && station.isActive === false);
+
+        return matchesSearch && matchesCountry && matchesGenre && matchesType && matchesImage && matchesActive;
     });
 
     currentPage = 1;
@@ -135,13 +157,99 @@ function filterStations() {
 
 function changePage(direction) {
     const totalPages = Math.ceil(filteredStations.length / stationsPerPage);
-    if (direction === 'next' && currentPage < totalPages) {
+    
+    // Handle both numeric and string direction parameters
+    if ((direction === 'next' || direction === 1) && currentPage < totalPages) {
         currentPage++;
-    } else if (direction === 'prev' && currentPage > 1) {
+    } else if ((direction === 'prev' || direction === -1) && currentPage > 1) {
         currentPage--;
     }
+    
     renderStations();
 }
+
+// Update station status function
+async function updateStationStatus(stationId, isActiveValue) {
+    try {
+        const isActive = isActiveValue === 'true';
+        console.log(`Updating station ${stationId} status to: ${isActive}`);
+        
+        const response = await fetch(`/stations/${stationId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ isActive })
+        });
+
+        if (response.ok) {
+            const updatedStation = await response.json();
+            
+            // Update the station in our local data arrays
+            const updateStationInArray = (stationArray) => {
+                const stationIndex = stationArray.findIndex(s => s.id === stationId);
+                if (stationIndex !== -1) {
+                    stationArray[stationIndex] = updatedStation;
+                }
+            };
+            
+            if (typeof stations !== 'undefined' && Array.isArray(stations)) {
+                updateStationInArray(stations);
+            }
+            
+            if (typeof filteredStations !== 'undefined' && Array.isArray(filteredStations)) {
+                updateStationInArray(filteredStations);
+            }
+            
+            // Re-render the stations to show the updated status
+            renderStations();
+            
+            console.log(`✅ Station ${stationId} status updated successfully`);
+            
+            // Show a subtle success indicator (optional)
+            showStatusUpdateSuccess(stationId, isActive);
+            
+        } else {
+            const error = await response.json();
+            console.error('Failed to update station status:', error);
+            alert(`Failed to update station status: ${error.error || 'Unknown error'}`);
+            
+            // Revert the dropdown to its previous value
+            revertStatusDropdown(stationId, !isActive);
+        }
+    } catch (error) {
+        console.error('Error updating station status:', error);
+        alert('Error updating station status');
+        
+        // Revert the dropdown to its previous value
+        revertStatusDropdown(stationId, !isActive);
+    }
+}
+
+// Helper function to revert dropdown value on error
+function revertStatusDropdown(stationId, originalValue) {
+    const dropdowns = document.querySelectorAll(`select[onchange*="${stationId}"]`);
+    dropdowns.forEach(dropdown => {
+        dropdown.value = originalValue.toString();
+    });
+}
+
+// Helper function to show subtle success feedback
+function showStatusUpdateSuccess(stationId, isActive) {
+    // Find the station row and briefly highlight it
+    const stationRows = document.querySelectorAll('.station-row');
+    stationRows.forEach(row => {
+        if (row.innerHTML.includes(`editStation(${stationId})`)) {
+            row.style.backgroundColor = '#f0f9ff';
+            setTimeout(() => {
+                row.style.backgroundColor = '';
+            }, 1000);
+        }
+    });
+}
+
+// Make function globally available
+window.updateStationStatus = updateStationStatus;
 
 function updateStationsCount() {
     document.getElementById('stations-count').textContent = filteredStations.length;

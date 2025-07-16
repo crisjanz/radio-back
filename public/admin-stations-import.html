@@ -129,7 +129,16 @@
                 </div>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Station Type</label>
+                    <select id="filter-station-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">All Stations</option>
+                        <option value="simulcast">Simulcast (AM/FM Online)</option>
+                        <option value="internet-native">Internet-Only</option>
+                        <option value="high-quality">High Quality (192+ kbps)</option>
+                    </select>
+                </div>
                 <div>
                     <label class="block text-sm font-medium mb-2">Order By</label>
                     <select id="filter-order" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -222,6 +231,37 @@
                     </table>
                 </div>
             </div>
+            
+            <!-- Pagination Controls -->
+            <div id="pagination-controls" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-600">
+                            Showing <span id="showing-start">1</span> to <span id="showing-end">50</span> of <span id="total-results">0</span> stations
+                        </span>
+                        <div class="flex items-center space-x-2">
+                            <label class="text-sm text-gray-600">Per page:</label>
+                            <select id="stations-per-page" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="prev-page" onclick="changePage(currentPage - 1)" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fas fa-chevron-left mr-1"></i>Previous
+                        </button>
+                        <div id="page-numbers" class="flex space-x-1">
+                            <!-- Page numbers will be inserted here -->
+                        </div>
+                        <button id="next-page" onclick="changePage(currentPage + 1)" class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Next<i class="fas fa-chevron-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Empty State -->
@@ -248,12 +288,17 @@
     <!-- Import-specific JavaScript -->
     <script>
         // Import page variables
-        let searchResults = [];
+        let allSearchResults = []; // Unfiltered results from API
+        let searchResults = []; // Filtered results for display
         let selectedStationIds = new Set();
         let importedStations = new Set();
         let duplicateStations = new Map(); // Maps station index to existing station info
         let countries = [];
         let states = [];
+        
+        // Pagination variables
+        let currentPage = 1;
+        let stationsPerPage = 50;
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', async function() {
@@ -275,6 +320,83 @@
                     document.getElementById('filter-state').disabled = true;
                 }
             });
+            
+            // Station type filter (client-side)
+            document.getElementById('filter-station-type').addEventListener('change', function(e) {
+                if (allSearchResults.length > 0) {
+                    currentPage = 1; // Reset to first page
+                    applyClientSideFilters();
+                    document.getElementById('results-count').textContent = searchResults.length;
+                    if (searchResults.length > 0) {
+                        renderStationResults();
+                        document.getElementById('results-section').classList.remove('hidden');
+                    } else {
+                        document.getElementById('results-section').classList.add('hidden');
+                        document.getElementById('empty-state').classList.remove('hidden');
+                    }
+                }
+            });
+            
+            // Stations per page selector
+            document.getElementById('stations-per-page').addEventListener('change', function(e) {
+                stationsPerPage = parseInt(e.target.value);
+                currentPage = 1; // Reset to first page
+                if (searchResults.length > 0) {
+                    renderStationResults();
+                }
+            });
+        }
+
+        // Client-side filtering function
+        function applyClientSideFilters() {
+            const stationType = document.getElementById('filter-station-type').value;
+            
+            if (!stationType) {
+                // No filter, show all results
+                searchResults = [...allSearchResults];
+                return;
+            }
+            
+            searchResults = allSearchResults.filter(station => {
+                const name = (station.name || '');
+                
+                switch (stationType) {
+                    case 'simulcast':
+                        // AM/FM stations with frequency patterns
+                        return (
+                            // FM frequency pattern: ##.# (like 101.5, 95.7)
+                            /\b\d{2,3}\.\d\b/.test(name) ||
+                            // AM frequency pattern: ### or #### (like 1010, 770)
+                            /\b\d{3,4}\b/.test(name) ||
+                            // Also include common AM/FM indicators
+                            /\b(fm|am)\b/i.test(name) ||
+                            /\b(fm|am)\b/i.test(station.tags || '')
+                        );
+                        
+                    case 'internet-native':
+                        // Internet-native: stations WITHOUT frequency patterns
+                        return !(
+                            /\b\d{2,3}\.\d\b/.test(name) ||
+                            /\b\d{3,4}\b/.test(name) ||
+                            /\b(fm|am)\b/i.test(name) ||
+                            /\b(fm|am)\b/i.test(station.tags || '')
+                        );
+                        
+                    case 'high-quality':
+                        // High quality streams (128+ kbps)
+                        return (
+                            (station.bitrate && station.bitrate >= 128) ||
+                            station.codec === 'AAC+' ||
+                            station.codec === 'AAC' ||
+                            station.hls === 1
+                        );
+                        
+                    default:
+                        return true;
+                }
+            });
+            
+            console.log(`🔍 Client-side filter (${stationType}): ${allSearchResults.length} -> ${searchResults.length} stations`);
         }
 
         async function loadCountries() {
@@ -395,7 +517,7 @@
             document.getElementById('empty-state').classList.add('hidden');
 
             try {
-                // Build search parameters
+                // Build search parameters (stationType handled client-side, no limit)
                 const params = new URLSearchParams({
                     name: document.getElementById('filter-name').value,
                     country: document.getElementById('filter-country').value,
@@ -404,8 +526,7 @@
                     minBitrate: document.getElementById('filter-bitrate').value,
                     hasGeo: document.getElementById('filter-geo').checked.toString(),
                     hidebroken: 'true',
-                    order: document.getElementById('filter-order').value,
-                    limit: document.getElementById('filter-limit').value
+                    order: document.getElementById('filter-order').value
                 });
 
                 const response = await fetch(`/import/preview?${params.toString()}`);
@@ -415,7 +536,11 @@
                 }
 
                 const data = await response.json();
-                searchResults = data.stations || [];
+                allSearchResults = data.stations || []; // Store unfiltered results
+                currentPage = 1; // Reset to first page for new search
+                
+                // Apply client-side filtering
+                applyClientSideFilters();
                 
                 // Check for duplicates against existing stations
                 await checkDuplicates();
@@ -443,12 +568,99 @@
             const tbody = document.getElementById('stations-list');
             tbody.innerHTML = '';
             
-            searchResults.forEach((station, index) => {
-                const row = createStationRow(station, index);
+            // Calculate pagination
+            const totalResults = searchResults.length;
+            const startIndex = (currentPage - 1) * stationsPerPage;
+            const endIndex = Math.min(startIndex + stationsPerPage, totalResults);
+            const pageStations = searchResults.slice(startIndex, endIndex);
+            
+            // Render only the current page's stations
+            pageStations.forEach((station, pageIndex) => {
+                const globalIndex = startIndex + pageIndex; // Global index for selection tracking
+                const row = createStationRow(station, globalIndex);
                 tbody.appendChild(row);
             });
             
             updateSelectedCount();
+            updatePagination();
+        }
+
+        function updatePagination() {
+            const totalResults = searchResults.length;
+            const totalPages = Math.ceil(totalResults / stationsPerPage);
+            const startIndex = (currentPage - 1) * stationsPerPage + 1;
+            const endIndex = Math.min(currentPage * stationsPerPage, totalResults);
+            
+            // Update showing text
+            document.getElementById('showing-start').textContent = totalResults > 0 ? startIndex : 0;
+            document.getElementById('showing-end').textContent = endIndex;
+            document.getElementById('total-results').textContent = totalResults;
+            
+            // Update pagination buttons
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+            const paginationControls = document.getElementById('pagination-controls');
+            
+            if (totalResults === 0) {
+                paginationControls.style.display = 'none';
+                return;
+            } else {
+                paginationControls.style.display = 'block';
+            }
+            
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+            
+            // Generate page numbers
+            const pageNumbers = document.getElementById('page-numbers');
+            pageNumbers.innerHTML = '';
+            
+            // Show page numbers (simplified - show current, previous, next, first, last)
+            const pagesToShow = [];
+            
+            // Always show first page
+            if (totalPages > 1) pagesToShow.push(1);
+            
+            // Show pages around current page
+            for (let i = Math.max(1, currentPage - 1); i <= Math.min(totalPages, currentPage + 1); i++) {
+                if (!pagesToShow.includes(i)) pagesToShow.push(i);
+            }
+            
+            // Always show last page
+            if (totalPages > 1 && !pagesToShow.includes(totalPages)) {
+                pagesToShow.push(totalPages);
+            }
+            
+            // Sort and add ellipsis where needed
+            pagesToShow.sort((a, b) => a - b);
+            
+            pagesToShow.forEach((pageNum, index) => {
+                // Add ellipsis if there's a gap
+                if (index > 0 && pageNum - pagesToShow[index - 1] > 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.textContent = '...';
+                    ellipsis.className = 'px-2 py-1 text-sm text-gray-500';
+                    pageNumbers.appendChild(ellipsis);
+                }
+                
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = pageNum;
+                pageBtn.className = `px-3 py-1 text-sm border rounded ${
+                    pageNum === currentPage 
+                        ? 'bg-blue-600 text-white border-blue-600' 
+                        : 'border-gray-300 hover:bg-gray-50'
+                }`;
+                pageBtn.onclick = () => changePage(pageNum);
+                pageNumbers.appendChild(pageBtn);
+            });
+        }
+
+        function changePage(newPage) {
+            const totalPages = Math.ceil(searchResults.length / stationsPerPage);
+            if (newPage < 1 || newPage > totalPages) return;
+            
+            currentPage = newPage;
+            renderStationResults();
         }
 
         function createStationRow(station, index) {
@@ -677,6 +889,9 @@ editStationForImport(savedStation);
             // Set the current editing station
             currentEditingStation = stationData;
             originalStationData = { ...stationData };
+            
+            // Load genre constants before populating
+            await genreManager.loadConstants();
             
             // Populate the editor with the data
             populateStationEditor(stationData);

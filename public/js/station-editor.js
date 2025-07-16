@@ -68,6 +68,15 @@ function populateStationEditor(station) {
     document.getElementById('editor-station-name').textContent = station.name || 'Unnamed Station';
     document.getElementById('editor-station-id').textContent = station.id;
 
+    // Show/hide delete buttons based on whether this is a new station
+    const isNewStation = station.id === 'NEW' || !station.id;
+    const deleteButtons = document.querySelectorAll('#delete-station-btn, #delete-station-btn-footer');
+    deleteButtons.forEach(btn => {
+        if (btn) {
+            btn.style.display = isNewStation ? 'none' : 'block';
+        }
+    });
+
     // Basic Info
     document.getElementById('edit-name').value = station.name || '';
     document.getElementById('edit-country').value = station.country || '';
@@ -332,6 +341,64 @@ function collectStationFormData() {
     };
 }
 
+// Delete station function
+async function deleteStation() {
+    if (!currentEditingStation || !currentEditingStation.id) {
+        showError('No station selected for deletion');
+        return;
+    }
+
+    // Confirm deletion
+    const stationName = currentEditingStation.name || 'this station';
+    const confirmDelete = confirm(`Are you sure you want to delete "${stationName}"?\n\nThis action cannot be undone and will permanently remove the station from the database.`);
+    
+    if (!confirmDelete) {
+        return;
+    }
+
+    try {
+        console.log('Deleting station:', currentEditingStation.id);
+        
+        const response = await fetch(`/stations/${currentEditingStation.id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            // Remove the station from local data arrays
+            if (typeof stations !== 'undefined' && Array.isArray(stations)) {
+                const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
+                if (stationIndex !== -1) {
+                    stations.splice(stationIndex, 1);
+                }
+            }
+
+            if (typeof filteredStations !== 'undefined' && Array.isArray(filteredStations)) {
+                const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
+                if (filteredIndex !== -1) {
+                    filteredStations.splice(filteredIndex, 1);
+                }
+            }
+            
+            showSuccess(`Station "${stationName}" deleted successfully!`);
+            closeStationEditor();
+            
+            // Re-render the stations list if function exists
+            if (typeof renderStations === 'function') {
+                renderStations();
+            }
+        } else {
+            const error = await response.json();
+            showError(`Failed to delete station: ${error.error || 'Unknown error'}`);
+        }
+    } catch (error) {
+        console.error('Error deleting station:', error);
+        showError('Error deleting station');
+    }
+}
+
 // Modal management functions
 function closeStationEditor() {
     const modal = document.getElementById('station-editor-modal');
@@ -484,7 +551,9 @@ async function testStreamConnectivity() {
 
 // Expose functions globally for onclick handlers (temporary)
 window.editStation = editStation;
+window.populateStationEditor = populateStationEditor;
 window.saveStation = saveStation;
+window.deleteStation = deleteStation;
 window.closeStationEditor = closeStationEditor;
 window.resetStationForm = resetStationForm;
 window.testStreamHealth = testStreamHealth;
@@ -513,6 +582,10 @@ window.addType = (value) => genreManager.addType(value);
 window.removeGenres = (index) => genreManager.removeGenres(index);
 window.removeSubgenres = (index) => genreManager.removeSubgenres(index);
 window.removeTypes = (index) => genreManager.removeTypes(index);
+// Singular versions for HTML onclick handlers
+window.removeGenre = (index) => genreManager.removeGenres(index);
+window.removeSubgenre = (index) => genreManager.removeSubgenres(index);
+window.removeType = (index) => genreManager.removeTypes(index);
 window.showCustomGenreInput = () => genreManager.showCustomGenreInput();
 window.cancelCustomGenre = () => genreManager.cancelCustomGenre();
 window.addCustomGenre = () => genreManager.addCustomGenre();
