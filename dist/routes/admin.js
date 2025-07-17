@@ -113,90 +113,107 @@ router.post('/stations/analyze', async (req, res) => {
                 name: true,
                 genre: true,
                 type: true,
-                country: true
+                country: true,
+                description: true
             }
         });
         const pendingChanges = [];
-        const genreRules = [
-            { keywords: ['rock'], normalized: 'rock' },
-            { keywords: ['country'], normalized: 'country' },
-            { keywords: ['pop'], normalized: 'pop' },
-            { keywords: ['jazz'], normalized: 'jazz' },
-            { keywords: ['blues'], normalized: 'blues' },
-            { keywords: ['classical'], normalized: 'classical' },
-            { keywords: ['electronic', 'dance', 'edm'], normalized: 'electronic' },
-            { keywords: ['hip', 'rap'], normalized: 'hip-hop' },
-            { keywords: ['folk'], normalized: 'folk' },
-            { keywords: ['christian', 'religious', 'gospel'], normalized: 'christian' },
-            { keywords: ['oldies', 'classic hits', '60s', '70s', '80s', '90s'], normalized: 'oldies' },
-            { keywords: ['alternative', 'indie'], normalized: 'alternative' }
-        ];
-        const typeRules = [
-            { keywords: ['news'], normalized: 'news' },
-            { keywords: ['talk'], normalized: 'talk' },
-            { keywords: ['sport', 'espn'], normalized: 'sport' }
-        ];
+        const { GENRE_SYSTEM, getAllGenres, isValidGenre } = await Promise.resolve().then(() => __importStar(require('../constants/genres')));
+        const { STATION_TYPES, suggestStationTypeForStation, isValidStationType } = await Promise.resolve().then(() => __importStar(require('../constants/stationTypes')));
+        const genreRules = [];
+        Object.entries(GENRE_SYSTEM).forEach(([key, info]) => {
+            genreRules.push({
+                keywords: [key, info.name.toLowerCase(), ...info.subgenres],
+                normalized: key
+            });
+        });
+        const typeRules = [];
+        Object.entries(STATION_TYPES).forEach(([key, info]) => {
+            typeRules.push({
+                keywords: [key, info.name.toLowerCase(), ...info.keywords],
+                normalized: key
+            });
+        });
         for (const station of stations) {
+            const stationData = {
+                name: station.name,
+                description: station.description || '',
+                genre: station.genre || '',
+                subgenre: ''
+            };
             if (station.genre) {
-                const genre = station.genre.toLowerCase();
-                for (const rule of genreRules) {
-                    if (rule.keywords.some(keyword => genre.includes(keyword)) && genre !== rule.normalized) {
+                const currentGenre = station.genre.toLowerCase();
+                if (!isValidGenre(currentGenre)) {
+                    let bestMatch = null;
+                    let bestScore = 0;
+                    for (const rule of genreRules) {
+                        const score = rule.keywords.reduce((acc, keyword) => {
+                            if (currentGenre.includes(keyword.toLowerCase())) {
+                                return acc + (keyword.length / currentGenre.length);
+                            }
+                            return acc;
+                        }, 0);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMatch = rule.normalized;
+                        }
+                    }
+                    if (bestMatch && bestScore > 0.3) {
                         const existingChange = pendingChanges.find(c => c.stationId === station.id && c.field === 'genre');
                         if (!existingChange) {
                             pendingChanges.push({
                                 stationId: station.id,
                                 field: 'genre',
                                 original: station.genre,
-                                suggested: rule.normalized,
+                                suggested: bestMatch,
+                                confidence: Math.round(bestScore * 100),
                                 status: 'pending'
                             });
                         }
-                        break;
                     }
                 }
             }
+            const suggestedTypes = suggestStationTypeForStation(stationData);
             if (station.type) {
-                const type = station.type.toLowerCase();
-                for (const rule of typeRules) {
-                    if (rule.keywords.some(keyword => type.includes(keyword)) && type !== rule.normalized) {
+                const currentType = station.type.toLowerCase();
+                if (!isValidStationType(currentType)) {
+                    if (suggestedTypes.length > 0) {
                         const existingChange = pendingChanges.find(c => c.stationId === station.id && c.field === 'type');
                         if (!existingChange) {
                             pendingChanges.push({
                                 stationId: station.id,
                                 field: 'type',
                                 original: station.type,
-                                suggested: rule.normalized,
+                                suggested: suggestedTypes[0],
+                                confidence: 85,
                                 status: 'pending'
                             });
                         }
-                        break;
-                    }
-                }
-                if (!typeRules.some(rule => rule.keywords.some(keyword => type.includes(keyword))) && type !== 'music') {
-                    const existingChange = pendingChanges.find(c => c.stationId === station.id && c.field === 'type');
-                    if (!existingChange) {
-                        pendingChanges.push({
-                            stationId: station.id,
-                            field: 'type',
-                            original: station.type,
-                            suggested: 'music',
-                            status: 'pending'
-                        });
                     }
                 }
             }
             else {
-                pendingChanges.push({
-                    stationId: station.id,
-                    field: 'type',
-                    original: null,
-                    suggested: 'music',
-                    status: 'pending'
-                });
+                if (suggestedTypes.length > 0) {
+                    pendingChanges.push({
+                        stationId: station.id,
+                        field: 'type',
+                        original: null,
+                        suggested: suggestedTypes[0],
+                        confidence: 75,
+                        status: 'pending'
+                    });
+                }
             }
         }
-        console.log(`🔍 Analysis complete: found ${pendingChanges.length} suggested changes`);
-        return res.json({ pendingChanges });
+        console.log(`🔍 Sophisticated analysis complete: found ${pendingChanges.length} suggested changes`);
+        return res.json({
+            pendingChanges,
+            analysisStats: {
+                totalStations: stations.length,
+                suggestedChanges: pendingChanges.length,
+                confidence: pendingChanges.length > 0 ? Math.round(pendingChanges.reduce((acc, c) => acc + (c.confidence || 50), 0) / pendingChanges.length) : 0
+            }
+        });
     }
     catch (error) {
         console.error('❌ Error analyzing stations:', error);
@@ -424,55 +441,68 @@ router.post('/scrape-url', async (req, res) => {
 });
 router.post('/normalize-preview', async (req, res) => {
     try {
-        const { genre, type, name } = req.body;
-        const genreRules = [
-            { keywords: ['rock'], normalized: 'rock' },
-            { keywords: ['country'], normalized: 'country' },
-            { keywords: ['pop'], normalized: 'pop' },
-            { keywords: ['jazz'], normalized: 'jazz' },
-            { keywords: ['blues'], normalized: 'blues' },
-            { keywords: ['classical'], normalized: 'classical' },
-            { keywords: ['electronic', 'dance', 'edm'], normalized: 'electronic' },
-            { keywords: ['hip', 'rap'], normalized: 'hip-hop' },
-            { keywords: ['folk'], normalized: 'folk' },
-            { keywords: ['christian', 'religious', 'gospel'], normalized: 'christian' },
-            { keywords: ['oldies', 'classic hits', '60s', '70s', '80s', '90s'], normalized: 'oldies' },
-            { keywords: ['alternative', 'indie'], normalized: 'alternative' }
-        ];
-        const typeRules = [
-            { keywords: ['news'], normalized: 'news' },
-            { keywords: ['talk'], normalized: 'talk' },
-            { keywords: ['sport', 'espn'], normalized: 'sport' }
-        ];
+        const { genre, type, name, description } = req.body;
+        const { GENRE_SYSTEM, isValidGenre } = await Promise.resolve().then(() => __importStar(require('../constants/genres')));
+        const { suggestStationTypeForStation, isValidStationType } = await Promise.resolve().then(() => __importStar(require('../constants/stationTypes')));
         let suggestedGenre = null;
         let suggestedType = null;
+        let suggestedSubgenres = [];
         if (genre) {
-            const genreText = genre.toLowerCase();
-            for (const rule of genreRules) {
-                if (rule.keywords.some(keyword => genreText.includes(keyword)) && genreText !== rule.normalized) {
-                    suggestedGenre = rule.normalized;
-                    break;
+            const currentGenre = genre.toLowerCase();
+            if (!isValidGenre(currentGenre)) {
+                let bestMatch = null;
+                let bestScore = 0;
+                Object.entries(GENRE_SYSTEM).forEach(([key, info]) => {
+                    const keywords = [key, info.name.toLowerCase(), ...info.subgenres];
+                    const score = keywords.reduce((acc, keyword) => {
+                        if (currentGenre.includes(keyword.toLowerCase())) {
+                            return acc + (keyword.length / currentGenre.length);
+                        }
+                        return acc;
+                    }, 0);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = key;
+                    }
+                });
+                if (bestMatch && bestScore > 0.3) {
+                    suggestedGenre = bestMatch;
                 }
             }
         }
+        const stationData = {
+            name: name || '',
+            description: description || '',
+            genre: genre || '',
+            subgenre: ''
+        };
+        const suggestedTypes = suggestStationTypeForStation(stationData);
         if (type) {
-            const typeText = type.toLowerCase();
-            for (const rule of typeRules) {
-                if (rule.keywords.some(keyword => typeText.includes(keyword)) && typeText !== rule.normalized) {
-                    suggestedType = rule.normalized;
-                    break;
+            const currentType = type.toLowerCase();
+            if (!isValidStationType(currentType)) {
+                if (suggestedTypes.length > 0) {
+                    suggestedType = suggestedTypes[0];
                 }
-            }
-            if (!suggestedType && !typeRules.some(rule => rule.keywords.some(keyword => typeText.includes(keyword))) && typeText !== 'music') {
-                suggestedType = 'music';
             }
         }
         else {
-            suggestedType = 'music';
+            if (suggestedTypes.length > 0) {
+                suggestedType = suggestedTypes[0];
+            }
+        }
+        const effectiveGenre = suggestedGenre || genre;
+        if (effectiveGenre && GENRE_SYSTEM[effectiveGenre]) {
+            suggestedSubgenres = GENRE_SYSTEM[effectiveGenre].subgenres.slice(0, 3);
         }
         res.json({
             genre: suggestedGenre,
-            type: suggestedType
+            type: suggestedType,
+            subgenres: suggestedSubgenres,
+            allTypes: suggestedTypes,
+            confidence: {
+                genre: suggestedGenre ? 85 : 0,
+                type: suggestedType ? 80 : 0
+            }
         });
     }
     catch (error) {
@@ -520,6 +550,129 @@ router.get('/constants/collection-tags', async (req, res) => {
     catch (error) {
         console.error('❌ Error loading collection tag constants:', error);
         res.status(500).json({ error: 'Failed to load collection tag constants' });
+    }
+});
+router.post('/test-metadata-url', async (req, res) => {
+    try {
+        const { url, format } = req.body;
+        console.log(`🧪 Testing metadata URL: ${url} (format: ${format || 'auto'})`);
+        if (url === 'automatic' || format === 'auto') {
+            console.log('✅ Rogers Auto configuration detected');
+            return res.json({
+                success: true,
+                metadata: {
+                    title: 'Rogers Auto Configuration',
+                    artist: 'System Test',
+                    song: 'Rogers API integration enabled'
+                },
+                message: 'Rogers Auto configuration is working. Metadata will be provided automatically during playback.'
+            });
+        }
+        if (!url) {
+            return res.status(400).json({
+                success: false,
+                error: 'URL is required'
+            });
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await (0, node_fetch_1.default)(url, {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Streemr-Admin-Test/1.0',
+                'Accept': 'application/json, text/javascript, */*'
+            }
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const contentType = response.headers.get('content-type') || '';
+        let data;
+        const responseText = await response.text();
+        if (format === 'jsonp' || url.includes('callback=')) {
+            const jsonpMatch = responseText.match(/(?:callback|jsonpcallback|cb)\((.+)\);?$/);
+            if (jsonpMatch) {
+                data = JSON.parse(jsonpMatch[1]);
+            }
+            else {
+                throw new Error('Invalid JSONP format');
+            }
+        }
+        else if (format === 'json' || contentType.includes('json') || responseText.trim().startsWith('{')) {
+            data = JSON.parse(responseText);
+        }
+        else if (format === 'xml' || contentType.includes('xml')) {
+            return res.json({
+                success: true,
+                metadata: {
+                    title: 'XML Response',
+                    artist: 'Parsed Successfully',
+                    song: 'XML format detected'
+                },
+                rawResponse: responseText.substring(0, 500) + '...'
+            });
+        }
+        else {
+            try {
+                data = JSON.parse(responseText);
+            }
+            catch {
+                return res.json({
+                    success: true,
+                    metadata: {
+                        title: 'Text Response',
+                        artist: 'Parsed Successfully',
+                        song: 'Text format detected'
+                    },
+                    rawResponse: responseText.substring(0, 500) + '...'
+                });
+            }
+        }
+        let metadata = {};
+        if (data.song_name && data.artist_name) {
+            metadata = {
+                title: data.song_name,
+                artist: data.artist_name,
+                song: `${data.artist_name} - ${data.song_name}`,
+                artwork: data.itunes_img || data.image
+            };
+        }
+        else if (data.title || data.artist || data.track) {
+            metadata = {
+                title: data.title || data.track || data.song,
+                artist: data.artist || data.performer,
+                song: data.song || (data.artist && data.title ? `${data.artist} - ${data.title}` : ''),
+                album: data.album
+            };
+        }
+        else if (data.data && (data.data.title || data.data.artist)) {
+            metadata = {
+                title: data.data.title,
+                artist: data.data.artist,
+                song: data.data.title && data.data.artist ? `${data.data.artist} - ${data.data.title}` : ''
+            };
+        }
+        else {
+            metadata = {
+                title: 'Data Found',
+                artist: 'Successfully Parsed',
+                song: 'Metadata detected but format unknown'
+            };
+        }
+        res.json({
+            success: true,
+            metadata,
+            format: format || 'auto-detected',
+            contentType
+        });
+    }
+    catch (error) {
+        console.error('❌ Error testing metadata URL:', error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 });
 exports.default = router;

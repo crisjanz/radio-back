@@ -70,6 +70,69 @@
     max-width: 100%;
     overflow: hidden;
 }
+
+/* Collapsible card styles */
+.collapsible-card {
+    transition: all 0.3s ease;
+}
+
+.collapsible-header {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 0.75rem 0.75rem 0 0;
+    user-select: none;
+}
+
+.collapsible-header:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.collapsible-header:active {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.collapsible-content {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.collapsible-content.collapsed {
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    opacity: 0;
+}
+
+.collapsible-content.expanded {
+    max-height: none;
+    opacity: 1;
+}
+
+.chevron-icon {
+    transition: transform 0.2s ease;
+}
+
+.chevron-icon.rotated {
+    transform: rotate(180deg);
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+    .desktop-two-column {
+        grid-template-columns: 1fr !important;
+    }
+    .mobile-hide-on-collapse {
+        display: none;
+    }
+    /* Improve mobile spacing */
+    .collapsible-card {
+        margin-bottom: 1rem;
+    }
+    /* Stack cards vertically with proper spacing */
+    .space-y-6 > * + * {
+        margin-top: 1rem;
+    }
+}
 </style>
 <div id="station-editor-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-xl max-w-7xl w-full max-h-[95vh] overflow-hidden flex flex-col">
@@ -94,8 +157,8 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-auto p-6">
-            <div class="grid grid-cols-2 gap-8">
-                <!-- Left Column -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 desktop-two-column">
+                <!-- Left Column: Form Inputs -->
                 <div class="space-y-6">
                     <!-- Basic Info -->
                     <div class="bg-gray-50 rounded-xl p-6">
@@ -330,120 +393,22 @@
                         </div>
                     </div>
 
-                    <!-- Metadata Configuration -->
-                    <div class="bg-cyan-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-music text-cyan-600 mr-2"></i>
-                            Metadata Configuration
-                        </h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Metadata API URL</label>
-                                <input type="url" id="edit-metadata-url" placeholder="https://api.example.com/nowplaying" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
-                            </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Metadata Type</label>
-                                    <select id="edit-metadata-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
-                                        <option value="">Select type...</option>
-                                        <option value="custom-api">Custom API</option>
-                                        <option value="icecast-json">Icecast JSON</option>
-                                        <option value="icecast-xml">Icecast XML</option>
-                                        <option value="shoutcast">Shoutcast</option>
-                                        <option value="socast">SoCast</option>
-                                        <option value="onlineradiobox">OnlineRadioBox</option>
-                                        <option value="rogers-auto">Rogers Auto (JSON Mapping)</option>
-                                        <option value="radio-co">Radio.co</option>
-                                        <option value="laut-fm">Laut.fm</option>
-                                        <option value="website-scrape">Website Scraping</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Response Format</label>
-                                    <select id="edit-metadata-format" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
-                                        <option value="">Auto-detect</option>
-                                        <option value="json">JSON</option>
-                                        <option value="xml">XML</option>
-                                        <option value="html">HTML</option>
-                                        <option value="jsonp">JSONP</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Custom Field Mapping (JSON)</label>
-                                <textarea id="edit-metadata-fields" rows="3" placeholder='{"title": "song.name", "artist": "artist.name"}' class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-mono text-sm"></textarea>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button onclick="testMetadataUrl()" class="px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm">
-                                    <i class="fas fa-play mr-1"></i>Test URL
-                                </button>
-                                <button onclick="discoverMetadataUrls()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
-                                    <i class="fas fa-search mr-1"></i>Discover URLs
-                                </button>
-                                <button onclick="openMetadataDiscovery()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
-                                    <i class="fas fa-external-link-alt mr-1"></i>Open Discovery Tool
-                                </button>
-                            </div>
-                            <div id="metadata-test-results" class="hidden">
-                                <div class="text-sm font-medium text-gray-700 mb-2">Test Results:</div>
-                                <div id="metadata-test-content" class="bg-white border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto">
-                                    <div class="text-sm text-gray-600"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Quality & Curation -->
-                    <div class="bg-indigo-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-star text-indigo-600 mr-2"></i>
-                            Quality & Curation
-                        </h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Quality Score</label>
-                                <div class="flex items-center space-x-3">
-                                    <input type="number" id="edit-quality-score" min="0" max="100" step="0.1" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                    <div class="flex items-center">
-                                        <span class="text-sm text-gray-500 mr-2">/ 100</span>
-                                        <button type="button" onclick="recalculateQualityScore()" class="px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
-                                            <i class="fas fa-calculator mr-1"></i>Calc
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" id="edit-editors-pick" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <span class="ml-2 text-sm text-gray-700">Editor's Pick</span>
-                                    </label>
-                                </div>
-                                <div>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" id="edit-featured" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                        <span class="ml-2 text-sm text-gray-700">Featured</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="edit-is-active" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
-                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Right Column -->
                 <div class="space-y-6">
                     <!-- Scraper Tools -->
-                    <div class="bg-yellow-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-search text-yellow-600 mr-2"></i>
-                            Scraper Tools
-                        </h3>
+                    <div class="bg-yellow-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('scraper-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-search text-yellow-600 mr-2"></i>
+                                    Scraper Tools
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="scraper-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="scraper-section" class="collapsible-content collapsed p-6 pt-0">
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Google Maps or Website URL:</label>
@@ -482,14 +447,21 @@
                                 </button>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     <!-- Image Editor -->
-                    <div class="bg-orange-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-image text-orange-600 mr-2"></i>
-                            Image Editor
-                        </h3>
+                    <div class="bg-orange-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('image-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-image text-orange-600 mr-2"></i>
+                                    Image Editor
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="image-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="image-section" class="collapsible-content collapsed p-6 pt-0">
                         <div class="space-y-4">
                             <div class="flex space-x-4">
                                 <div class="flex-1">
@@ -559,14 +531,21 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     <!-- Station Analysis -->
-                    <div class="bg-purple-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-brain text-purple-600 mr-2"></i>
-                            Smart Analysis
-                        </h3>
+                    <div class="bg-purple-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('analysis-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-brain text-purple-600 mr-2"></i>
+                                    Smart Analysis
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="analysis-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="analysis-section" class="collapsible-content collapsed p-6 pt-0">
                         <div class="space-y-4">
                             <div class="flex space-x-2">
                                 <button onclick="analyzeStation()" id="analyze-btn" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
@@ -640,14 +619,21 @@
                                 <div id="stream-test-status" class="text-sm"></div>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     <!-- Stream Health -->
-                    <div class="bg-green-50 rounded-xl p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <i class="fas fa-heart-pulse text-green-600 mr-2"></i>
-                            Stream Health
-                        </h3>
+                    <div class="bg-green-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('health-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-heart-pulse text-green-600 mr-2"></i>
+                                    Stream Health
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="health-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="health-section" class="collapsible-content collapsed p-6 pt-0">
                         <div class="space-y-3">
                             <div class="flex items-center justify-between">
                                 <span class="text-sm text-gray-700">Status:</span>
@@ -663,6 +649,126 @@
                             <button onclick="testStreamHealth()" class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                                 <i class="fas fa-play mr-2"></i>Test Stream Now
                             </button>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- Metadata Configuration -->
+                    <div class="bg-cyan-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('metadata-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-music text-cyan-600 mr-2"></i>
+                                    Metadata Configuration
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="metadata-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="metadata-section" class="collapsible-content collapsed p-6 pt-0">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Metadata API URL</label>
+                                    <input type="url" id="edit-metadata-url" placeholder="https://api.example.com/nowplaying" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Metadata Type</label>
+                                        <select id="edit-metadata-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                            <option value="">Select type...</option>
+                                            <option value="custom-api">Custom API</option>
+                                            <option value="icecast-json">Icecast JSON</option>
+                                            <option value="icecast-xml">Icecast XML</option>
+                                            <option value="shoutcast">Shoutcast</option>
+                                            <option value="socast">SoCast</option>
+                                            <option value="onlineradiobox">OnlineRadioBox</option>
+                                            <option value="rogers-auto">Rogers Auto (JSON Mapping)</option>
+                                            <option value="radio-co">Radio.co</option>
+                                            <option value="laut-fm">Laut.fm</option>
+                                            <option value="website-scrape">Website Scraping</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Response Format</label>
+                                        <select id="edit-metadata-format" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                            <option value="">Auto-detect</option>
+                                            <option value="json">JSON</option>
+                                            <option value="xml">XML</option>
+                                            <option value="html">HTML</option>
+                                            <option value="jsonp">JSONP</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Custom Field Mapping (JSON)</label>
+                                    <textarea id="edit-metadata-fields" rows="3" placeholder='{"title": "song.name", "artist": "artist.name"}' class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 font-mono text-sm"></textarea>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="testMetadataUrl()" class="px-3 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm">
+                                        <i class="fas fa-play mr-1"></i>Test URL
+                                    </button>
+                                    <button onclick="discoverMetadataUrls()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
+                                        <i class="fas fa-search mr-1"></i>Discover URLs
+                                    </button>
+                                    <button onclick="openMetadataDiscovery()" class="px-3 py-2 border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-colors text-sm">
+                                        <i class="fas fa-external-link-alt mr-1"></i>Open Discovery Tool
+                                    </button>
+                                </div>
+                                <div id="metadata-test-results" class="hidden">
+                                    <div class="text-sm font-medium text-gray-700 mb-2">Test Results:</div>
+                                    <div id="metadata-test-content" class="bg-white border border-gray-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                                        <div class="text-sm text-gray-600"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quality & Curation -->
+                    <div class="bg-indigo-50 rounded-xl collapsible-card">
+                        <div class="collapsible-header p-4 rounded-t-xl" onclick="toggleCollapse('quality-section')">
+                            <h3 class="text-lg font-semibold text-gray-900 flex items-center justify-between">
+                                <span class="flex items-center">
+                                    <i class="fas fa-star text-indigo-600 mr-2"></i>
+                                    Quality & Curation
+                                </span>
+                                <i class="fas fa-chevron-down chevron-icon rotated" id="quality-section-chevron"></i>
+                            </h3>
+                        </div>
+                        <div id="quality-section" class="collapsible-content collapsed p-6 pt-0">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Quality Score</label>
+                                    <div class="flex items-center space-x-3">
+                                        <input type="number" id="edit-quality-score" min="0" max="100" step="0.1" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <div class="flex items-center">
+                                            <span class="text-sm text-gray-500 mr-2">/ 100</span>
+                                            <button type="button" onclick="recalculateQualityScore()" class="px-2 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700">
+                                                <i class="fas fa-calculator mr-1"></i>Calc
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="edit-editors-pick" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <span class="ml-2 text-sm text-gray-700">Editor's Pick</span>
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="edit-featured" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <span class="ml-2 text-sm text-gray-700">Featured</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="edit-is-active" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
+                                        <span class="ml-2 text-sm text-gray-700">Active</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

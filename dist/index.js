@@ -10,6 +10,7 @@ const client_1 = require("@prisma/client");
 const stations_js_1 = __importDefault(require("./routes/stations.js"));
 const metadata_js_1 = __importDefault(require("./routes/metadata.js"));
 const import_js_1 = __importDefault(require("./routes/import.js"));
+const iheart_js_1 = __importDefault(require("./routes/iheart.js"));
 const admin_js_1 = __importDefault(require("./routes/admin.js"));
 const scraping_js_1 = __importDefault(require("./routes/scraping.js"));
 const health_js_1 = __importDefault(require("./routes/health.js"));
@@ -34,6 +35,7 @@ app.use('/components', express_1.default.static('public/components'));
 app.use('/stations', stations_js_1.default);
 app.use('/metadata', metadata_js_1.default);
 app.use('/import', import_js_1.default);
+app.use('/iheart', iheart_js_1.default);
 app.use('/admin', admin_js_1.default);
 app.use('/scrape', scraping_js_1.default);
 app.use('/health', health_js_1.default);
@@ -58,17 +60,26 @@ app.get('/admin/simple-image-editor', (req, res) => {
 app.get('/admin/stations/import', (req, res) => {
     res.sendFile('admin-stations-import.html', { root: 'public' });
 });
+app.get('/admin/iheart-import', (req, res) => {
+    res.sendFile('admin-iheart-import.html', { root: 'public' });
+});
 app.get('/admin/cleanup', (req, res) => {
     res.sendFile('admin-cleanup.html', { root: 'public' });
 });
 app.get('/ping', async (req, res) => {
     try {
-        const count = await prisma.station.count();
-        res.json({ ok: true, stations: count });
+        const uptime = process.uptime();
+        const timestamp = new Date().toISOString();
+        res.json({
+            ok: true,
+            timestamp,
+            uptime: Math.round(uptime),
+            message: 'Backend is alive'
+        });
     }
     catch (err) {
-        console.error('Ping DB failed:', err);
-        res.status(500).json({ ok: false, error: 'DB error' });
+        console.error('Ping failed:', err);
+        res.status(500).json({ ok: false, error: 'Ping error' });
     }
 });
 app.get('/stations/countries', async (req, res) => {
@@ -155,6 +166,7 @@ app.listen(PORT, HOST, () => {
     console.log("   • /stations - Station CRUD operations");
     console.log("   • /metadata - Icecast metadata detection");
     console.log("   • /import - Radio Browser import endpoints");
+    console.log("   • /iheart - iHeart Radio import endpoints");
     console.log("   • /admin - Admin dashboard and management");
     console.log("   • /health - Stream health checking endpoints");
     console.log("   • /auth - Authentication endpoints");

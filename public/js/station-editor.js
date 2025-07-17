@@ -56,6 +56,12 @@ async function editStation(stationId) {
     currentEditingStation = station;
     originalStationData = { ...station }; // Store original data for reset
     populateStationEditor(station);
+    
+    // Initialize collapsible sections after modal content is loaded
+    setTimeout(() => {
+        initializeCollapsibleSections();
+    }, 100);
+    
     const modal = document.getElementById('station-editor-modal');
     if (modal) {
         modal.classList.remove('hidden');
@@ -609,5 +615,37 @@ window.findGoogleBusiness = () => googleBusinessManager.findGoogleBusiness();
 // Validation functions
 window.resetForm = () => validationManager.resetForm();
 window.validateStationForm = () => validationManager.validateStationForm();
+
+// Collapsible functionality for right column cards
+function toggleCollapse(sectionId) {
+    const content = document.getElementById(sectionId);
+    const chevron = document.getElementById(sectionId + '-chevron');
+    
+    if (!content || !chevron) {
+        console.log('Missing elements for collapse:', sectionId);
+        return;
+    }
+    
+    if (content.classList.contains('collapsed')) {
+        content.classList.remove('collapsed');
+        content.classList.add('expanded');
+        chevron.classList.remove('rotated');
+    } else {
+        content.classList.remove('expanded');
+        content.classList.add('collapsed');
+        chevron.classList.add('rotated');
+    }
+}
+
+// Initialize collapsible sections when modal loads (now just for verification)
+function initializeCollapsibleSections() {
+    // Sections now start collapsed by default in HTML
+    // This function is kept for potential future use
+    console.log('Collapsible sections initialized');
+}
+
+// Expose collapsible functions globally
+window.toggleCollapse = toggleCollapse;
+window.initializeCollapsibleSections = initializeCollapsibleSections;
 
 console.log('✅ Station Editor ES6 modules loaded successfully');

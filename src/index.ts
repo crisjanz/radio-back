@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import stationRoutes from './routes/stations.js';
 import metadataRoutes from './routes/metadata.js';
 import importRoutes from './routes/import.js';
+import iheartRoutes from './routes/iheart.js';
 import adminRoutes from './routes/admin.js';
 import scrapingRoutes from './routes/scraping.js';
 import healthRoutes from './routes/health.js';
@@ -40,6 +41,7 @@ app.use('/components', express.static('public/components'));
 app.use('/stations', stationRoutes);
 app.use('/metadata', metadataRoutes);
 app.use('/import', importRoutes);
+app.use('/iheart', iheartRoutes);
 app.use('/admin', adminRoutes);
 app.use('/scrape', scrapingRoutes);
 app.use('/health', healthRoutes);
@@ -70,6 +72,9 @@ app.get('/admin/simple-image-editor', (req: Request, res: Response) => {
 app.get('/admin/stations/import', (req: Request, res: Response) => {
   res.sendFile('admin-stations-import.html', { root: 'public' });
 });
+app.get('/admin/iheart-import', (req: Request, res: Response) => {
+  res.sendFile('admin-iheart-import.html', { root: 'public' });
+});
 
 app.get('/admin/cleanup', (req: Request, res: Response) => {
   res.sendFile('admin-cleanup.html', { root: 'public' });
@@ -77,11 +82,18 @@ app.get('/admin/cleanup', (req: Request, res: Response) => {
 
 app.get('/ping', async (req, res) => {
   try {
-    const count = await prisma.station.count(); // ✅ FIXED
-    res.json({ ok: true, stations: count });
+    // Simple ping without database access for keep-alive
+    const uptime = process.uptime();
+    const timestamp = new Date().toISOString();
+    res.json({ 
+      ok: true, 
+      timestamp,
+      uptime: Math.round(uptime),
+      message: 'Backend is alive'
+    });
   } catch (err) {
-    console.error('Ping DB failed:', err);
-    res.status(500).json({ ok: false, error: 'DB error' });
+    console.error('Ping failed:', err);
+    res.status(500).json({ ok: false, error: 'Ping error' });
   }
 });
 
@@ -187,6 +199,7 @@ app.listen(PORT, HOST, () => {
   console.log("   • /stations - Station CRUD operations");
   console.log("   • /metadata - Icecast metadata detection");
   console.log("   • /import - Radio Browser import endpoints");
+  console.log("   • /iheart - iHeart Radio import endpoints");
   console.log("   • /admin - Admin dashboard and management");
   console.log("   • /health - Stream health checking endpoints");
   console.log("   • /auth - Authentication endpoints");

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iHeart Radio Import - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .station-row {
+            transition: all 0.2s ease;
+        }
+        .station-row:hover {
+            background-color: #f8fafc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        .search-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .search-btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        }
+        .import-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .loading {
+            display: none;
+        }
+        .loading.active {
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/admin/stations" class="text-gray-600 hover:text-gray-900 mr-4">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <h1 class="text-xl font-bold text-gray-900">iHeart Radio Import</h1>
+                    <span class="ml-2 px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">iHeart</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600">
+                        <span id="results-count">0</span> stations found
+                    </span>
+                    <span class="text-sm text-gray-600">
+                        <span id="selected-count">0</span> selected
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+
+        <!-- Search Section -->
+        <div class="search-section rounded-xl shadow-sm border border-gray-200 p-6 mb-6 text-white">
+            <h2 class="text-lg font-semibold mb-4 flex items-center">
+                <i class="fas fa-heart mr-2"></i>
+                Search iHeart Radio Stations (US Only)
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Search by Location</label>
+                    <input type="text" 
+                           id="location-search" 
+                           placeholder="e.g., Toronto, Vancouver, Montreal, Calgary, Ottawa"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Search by Keyword</label>
+                    <input type="text" 
+                           id="keyword-search" 
+                           placeholder="e.g., rock, country, news, sports"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            
+            <div class="flex justify-center">
+                <button onclick="searchStations()" class="search-btn text-white font-medium py-3 px-8 rounded-lg hover:opacity-90 transition-opacity">
+                    <i class="fas fa-search mr-2"></i>
+                    Search Stations
+                    <i class="loading fas fa-spinner fa-spin ml-2"></i>
+                </button>
+            </div>
+            
+            <p class="text-sm text-gray-200 mt-3 text-center">
+                <i class="fas fa-info-circle mr-1"></i>
+                Enter either a location or keyword to find iHeart Radio stations. Includes both US and Canadian stations.
+            </p>
+        </div>
+
+
+        <!-- Selection Controls -->
+        <div id="selection-controls" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6" style="display: none;">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button onclick="selectAll()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                        <i class="fas fa-check-square mr-1"></i>
+                        Select All
+                    </button>
+                    <button onclick="selectNone()" class="text-gray-600 hover:text-gray-800 text-sm font-medium">
+                        <i class="fas fa-square mr-1"></i>
+                        Select None
+                    </button>
+                </div>
+                <button onclick="importSelected()" class="import-btn text-white font-medium py-2 px-6 rounded-lg hover:opacity-90 transition-opacity">
+                    <i class="fas fa-download mr-2"></i>
+                    Import Selected (<span id="selected-count-btn">0</span>)
+                    <i class="loading fas fa-spinner fa-spin ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Table -->
+        <div id="results-section" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style="display: none;">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="w-8 px-6 py-3 text-center">
+                                <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            </th>
+                            <th class="w-16 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Logo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Station</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Genre</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stations-list" class="bg-white divide-y divide-gray-200">
+                        <!-- Station rows will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="text-center py-12">
+            <div class="w-16 h-16 mx-auto mb-4 text-gray-400">
+                <i class="fas fa-heart text-4xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Search iHeart Radio Stations</h3>
+            <p class="text-gray-600 mb-6 max-w-md mx-auto">
+                Use the search form above to find iHeart Radio stations by location or keyword. 
+                Once you find stations you like, select them and click import.
+            </p>
+        </div>
+
+        <!-- Success Message -->
+        <div id="success-message" class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6" style="display: none;">
+            <div class="flex items-center">
+                <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                <div>
+                    <h4 class="text-green-800 font-medium">Import Successful!</h4>
+                    <p class="text-green-700 text-sm" id="success-details"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-message" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6" style="display: none;">
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-circle text-red-500 mr-3"></i>
+                <div>
+                    <h4 class="text-red-800 font-medium">Import Error</h4>
+                    <p class="text-red-700 text-sm" id="error-details"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let searchResults = [];
+        let selectedStationIds = new Set();
+
+        // Search for iHeart stations
+        async function searchStations() {
+            const location = document.getElementById('location-search').value.trim();
+            const keyword = document.getElementById('keyword-search').value.trim();
+            
+            if (!location && !keyword) {
+                alert('Please enter either a location or keyword to search');
+                return;
+            }
+
+            const searchBtn = document.querySelector('.search-btn .loading');
+            searchBtn.classList.add('active');
+            
+            try {
+                const params = new URLSearchParams();
+                if (location) params.append('location', location);
+                if (keyword) params.append('keyword', keyword);
+                params.append('limit', '50');
+
+                const response = await fetch(`/iheart/search?${params.toString()}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    searchResults = data.stations || [];
+                    displayResults();
+                    updateResultsCount();
+                } else {
+                    showError(data.error || 'Failed to search stations');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                showError('Failed to search stations: ' + error.message);
+            } finally {
+                searchBtn.classList.remove('active');
+            }
+        }
+
+        // Display search results
+        function displayResults() {
+            const tbody = document.getElementById('stations-list');
+            const resultsSection = document.getElementById('results-section');
+            const selectionControls = document.getElementById('selection-controls');
+            const emptyState = document.getElementById('empty-state');
+
+            if (searchResults.length === 0) {
+                resultsSection.style.display = 'none';
+                selectionControls.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            resultsSection.style.display = 'block';
+            selectionControls.style.display = 'block';
+
+            tbody.innerHTML = searchResults.map((station, index) => `
+                <tr class="station-row">
+                    <td class="px-6 py-4 text-center">
+                        <input type="checkbox" 
+                               data-index="${index}" 
+                               onchange="toggleStationSelection(${index})" 
+                               class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </td>
+                    <td class="px-6 py-4">
+                        ${station.logo ? 
+                            `<img src="${station.logo}" alt="${station.name}" class="w-12 h-12 rounded object-cover" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iOCIgZmlsbD0iIzM3NEE2NyIvPgo8cGF0aCBkPSJNMjQgMTZWMzJNMTYgMjRIMzIiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo='">`
+                            : '<div class="w-12 h-12 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-heart text-gray-400"></i></div>'
+                        }
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="font-medium text-gray-900">${station.name}</div>
+                        ${station.description ? `<div class="text-sm text-gray-500">${station.description}</div>` : ''}
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">
+                            ${[station.city, station.state, station.country].filter(Boolean).join(', ')}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-900">${station.genre || 'N/A'}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        ${station.website ? 
+                            `<a href="${station.website}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm">
+                                <i class="fas fa-external-link-alt mr-1"></i>Website
+                            </a>` 
+                            : '<span class="text-gray-400 text-sm">N/A</span>'
+                        }
+                    </td>
+                </tr>
+            `).join('');
+
+            selectedStationIds.clear();
+            updateSelectionCount();
+        }
+
+        // Toggle station selection
+        function toggleStationSelection(index) {
+            if (selectedStationIds.has(index)) {
+                selectedStationIds.delete(index);
+            } else {
+                selectedStationIds.add(index);
+            }
+            updateSelectionCount();
+        }
+
+        // Select all stations
+        function selectAll() {
+            selectedStationIds.clear();
+            searchResults.forEach((_, index) => selectedStationIds.add(index));
+            updateCheckboxes();
+            updateSelectionCount();
+        }
+
+        // Select no stations
+        function selectNone() {
+            selectedStationIds.clear();
+            updateCheckboxes();
+            updateSelectionCount();
+        }
+
+        // Toggle select all
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (selectAllCheckbox.checked) {
+                selectAll();
+            } else {
+                selectNone();
+            }
+        }
+
+        // Update checkboxes to match selection
+        function updateCheckboxes() {
+            const checkboxes = document.querySelectorAll('input[data-index]');
+            checkboxes.forEach((checkbox, index) => {
+                checkbox.checked = selectedStationIds.has(index);
+            });
+            
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = selectedStationIds.size === searchResults.length && searchResults.length > 0;
+            }
+        }
+
+        // Update selection count displays
+        function updateSelectionCount() {
+            document.getElementById('selected-count').textContent = selectedStationIds.size;
+            document.getElementById('selected-count-btn').textContent = selectedStationIds.size;
+            updateCheckboxes();
+        }
+
+        // Update results count
+        function updateResultsCount() {
+            document.getElementById('results-count').textContent = searchResults.length;
+        }
+
+        // Import selected stations
+        async function importSelected() {
+            if (selectedStationIds.size === 0) {
+                alert('Please select at least one station to import');
+                return;
+            }
+
+            const importBtn = document.querySelector('.import-btn .loading');
+            importBtn.classList.add('active');
+
+            try {
+                const selectedStations = Array.from(selectedStationIds).map(index => searchResults[index]);
+                
+                const response = await fetch('/iheart/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ stations: selectedStations })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess(`Successfully imported ${data.imported} stations! ${data.errors > 0 ? `(${data.errors} errors)` : ''}`);
+                    
+                    // Clear selection after successful import
+                    selectedStationIds.clear();
+                    updateSelectionCount();
+                    
+                    // Optionally reload search results
+                    if (data.errors > 0) {
+                        console.log('Import errors:', data.errorDetails);
+                    }
+                } else {
+                    showError(data.error || 'Failed to import stations');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showError('Failed to import stations: ' + error.message);
+            } finally {
+                importBtn.classList.remove('active');
+            }
+        }
+
+        // Show success message
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            const errorDiv = document.getElementById('error-message');
+            
+            errorDiv.style.display = 'none';
+            document.getElementById('success-details').textContent = message;
+            successDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Show error message
+        function showError(message) {
+            const successDiv = document.getElementById('success-message');
+            const errorDiv = document.getElementById('error-message');
+            
+            successDiv.style.display = 'none';
+            document.getElementById('error-details').textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Handle Enter key in search inputs
+
+        document.getElementById('location-search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchStations();
+            }
+        });
+
+        document.getElementById('keyword-search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchStations();
+            }
+        });
+
+    </script>
+</body>
+</html>

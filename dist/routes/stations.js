@@ -31,13 +31,16 @@ router.get('/', async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 100;
         const skip = (page - 1) * limit;
+        const showInactive = req.query.includeInactive === 'true';
+        const whereClause = showInactive ? {} : { isActive: true };
         const [stations, total] = await Promise.all([
             prisma.station.findMany({
+                where: whereClause,
                 skip,
                 take: limit,
                 orderBy: { id: 'asc' }
             }),
-            prisma.station.count()
+            prisma.station.count({ where: whereClause })
         ]);
         if (req.query.page || req.query.limit) {
             res.json({
@@ -50,7 +53,7 @@ router.get('/', async (req, res) => {
             return;
         }
         else {
-            const allStations = await prisma.station.findMany();
+            const allStations = await prisma.station.findMany({ where: whereClause });
             res.json(allStations);
             return;
         }
@@ -70,8 +73,11 @@ router.get('/search', async (req, res) => {
         }
         const searchTerm = query.trim();
         console.log(`🔍 Searching stations for: "${searchTerm}"`);
+        const showInactive = req.query.includeInactive === 'true';
+        const activeFilter = showInactive ? {} : { isActive: true };
         const stations = await prisma.station.findMany({
             where: {
+                ...activeFilter,
                 OR: [
                     { name: { contains: searchTerm, mode: 'insensitive' } },
                     { country: { contains: searchTerm, mode: 'insensitive' } },
@@ -300,6 +306,78 @@ router.delete('/:id', async (req, res) => {
     catch (error) {
         console.error('❌ Error deleting station:', error);
         res.status(500).json({ error: 'Failed to delete station' });
+    }
+});
+router.post('/:id/calculate-quality', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            res.status(400).json({ error: 'Invalid station ID' });
+            return;
+        }
+        const station = await prisma.station.findUnique({
+            where: { id }
+        });
+        if (!station) {
+            res.status(404).json({ error: 'Station not found' });
+            return;
+        }
+        const feedback = await prisma.stationFeedback.findMany({
+            where: { stationId: id }
+        });
+        const totalFeedback = feedback.length;
+        const streamWorkingReports = feedback.filter(f => f.feedbackType === 'great_station').length;
+        const audioQualityReports = feedback.filter(f => f.feedbackType !== 'poor_audio_quality').length;
+        const correctInfoReports = feedback.filter(f => f.feedbackType !== 'wrong_information').length;
+        const positiveReports = feedback.filter(f => f.feedbackType === 'great_station').length;
+        const hasMetadata = !!(station.metadataApiUrl || station.metadataApiType);
+        let qualityScore = 0;
+        let breakdown = {
+            streamReliability: 0,
+            audioQuality: 0,
+            informationAccuracy: 0,
+            userSatisfaction: 0,
+            metadataRichness: 0
+        };
+        if (totalFeedback > 0) {
+            breakdown.streamReliability = ((streamWorkingReports / totalFeedback) * 100) * 0.3;
+            breakdown.audioQuality = ((audioQualityReports / totalFeedback) * 100) * 0.25;
+            breakdown.informationAccuracy = ((correctInfoReports / totalFeedback) * 100) * 0.2;
+            breakdown.userSatisfaction = ((positiveReports / totalFeedback) * 100) * 0.15;
+        }
+        else {
+            breakdown.streamReliability = station.lastPingSuccess ? 30 : 0;
+            breakdown.audioQuality = station.bitrate && station.bitrate > 64 ? 25 : 15;
+            breakdown.informationAccuracy = station.description && station.homepage ? 20 : 10;
+            breakdown.userSatisfaction = station.votes && station.votes > 0 ? 15 : 7.5;
+        }
+        breakdown.metadataRichness = hasMetadata ? 10 : 0;
+        qualityScore = breakdown.streamReliability + breakdown.audioQuality +
+            breakdown.informationAccuracy + breakdown.userSatisfaction +
+            breakdown.metadataRichness;
+        await prisma.station.update({
+            where: { id },
+            data: {
+                qualityScore,
+                feedbackCount: totalFeedback
+            }
+        });
+        console.log(`✅ Quality score calculated for station ${id}: ${qualityScore.toFixed(2)}%`);
+        res.json({
+            qualityScore,
+            feedbackCount: totalFeedback,
+            breakdown: {
+                streamReliability: breakdown.streamReliability / 0.3,
+                audioQuality: breakdown.audioQuality / 0.25,
+                informationAccuracy: breakdown.informationAccuracy / 0.2,
+                userSatisfaction: breakdown.userSatisfaction / 0.15,
+                metadataRichness: breakdown.metadataRichness / 0.1
+            }
+        });
+    }
+    catch (error) {
+        console.error('❌ Error calculating quality score:', error);
+        res.status(500).json({ error: 'Failed to calculate quality score' });
     }
 });
 exports.default = router;

@@ -290,9 +290,8 @@ router.get('/states/:country', async (req, res) => {
 router.get('/preview', async (req, res) => {
     try {
         console.log('📊 Preview request query params:', req.query);
-        const { name = '', country = '', state = '', minVotes = '0', minBitrate = '0', hasGeo = 'false', hidebroken = 'true', order = 'clickcount', limit = '100' } = req.query;
+        const { name = '', country = '', state = '', minVotes = '0', minBitrate = '0', stationType = '', hasGeo = 'false', hidebroken = 'true', order = 'clickcount', limit = '100' } = req.query;
         const params = new URLSearchParams({
-            limit: limit.toString(),
             hidebroken: hidebroken.toString(),
             order: order.toString(),
             reverse: 'true'
@@ -316,20 +315,29 @@ router.get('/preview', async (req, res) => {
             throw new Error(`Radio-Browser API returned ${response.status}`);
         }
         const allStations = await response.json();
+        console.log(`📡 Radio Browser API returned ${allStations.length} stations`);
         let filteredStations = allStations;
-        filteredStations = filteredStations.filter(station => station.lastcheckok === 1);
+        const beforeBrokenFilter = filteredStations.length;
+        filteredStations = filteredStations.filter(station => station.lastcheckok === 1 || station.lastcheckok === undefined);
+        console.log(`🔧 After broken filter: ${beforeBrokenFilter} -> ${filteredStations.length} stations`);
         const minVotesNum = parseInt(minVotes.toString());
         if (minVotesNum > 0) {
+            const beforeVotes = filteredStations.length;
             filteredStations = filteredStations.filter(station => (station.votes || 0) >= minVotesNum);
+            console.log(`🗳️ After votes filter (>=${minVotesNum}): ${beforeVotes} -> ${filteredStations.length} stations`);
         }
         const minBitrateNum = parseInt(minBitrate.toString());
         if (minBitrateNum > 0) {
+            const beforeBitrate = filteredStations.length;
             filteredStations = filteredStations.filter(station => (station.bitrate || 0) >= minBitrateNum);
+            console.log(`🎵 After bitrate filter (>=${minBitrateNum}): ${beforeBitrate} -> ${filteredStations.length} stations`);
         }
         if (hasGeo === 'true') {
+            const beforeGeo = filteredStations.length;
             filteredStations = filteredStations.filter(station => station.geo_lat && station.geo_long);
+            console.log(`🌍 After geo filter: ${beforeGeo} -> ${filteredStations.length} stations`);
         }
-        console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations`);
+        console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations (type: ${stationType || 'all'})`);
         return res.json({ stations: filteredStations });
     }
     catch (error) {
