@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { Parser } from 'icecast-parser';
+import { decodeHtmlEntities } from '../utils';
 
 export interface IcecastMetadata {
   hasMetadata: boolean;
@@ -171,8 +172,9 @@ async function extractCurrentTrack(streamUrl: string): Promise<string | undefine
         const streamTitle = metadata.get('StreamTitle');
         
         if (streamTitle && streamTitle.trim().length > 0) {
-          console.log(`🎵 Found track: ${streamTitle}`);
-          safeResolve(streamTitle.trim());
+          const decodedTitle = decodeHtmlEntities(streamTitle.trim());
+          console.log(`🎵 Found track: ${decodedTitle}`);
+          safeResolve(decodedTitle);
         } else {
           console.log('🎵 No current track (likely between songs)');
           safeResolve(undefined);

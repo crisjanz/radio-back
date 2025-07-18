@@ -80,6 +80,10 @@ app.get('/admin/cleanup', (req: Request, res: Response) => {
   res.sendFile('admin-cleanup.html', { root: 'public' });
 });
 
+app.get('/admin/logo-manager', (req: Request, res: Response) => {
+  res.sendFile('admin-logo-manager.html', { root: 'public' });
+});
+
 app.get('/ping', async (req, res) => {
   try {
     // Simple ping without database access for keep-alive

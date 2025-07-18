@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { detectStreamMetadata } from '../services/metadata';
-import { parseTrackTitle } from '../services/metadata/utils';
+import { parseTrackTitle, decodeHtmlEntities } from '../services/metadata/utils';
 import { PrismaClient } from '@prisma/client';
 
 const router = Router();
@@ -115,7 +115,8 @@ router.get('/:stationId', async (req: Request, res: Response) => {
           
           // Handle your local server's response format
           if (localData.song || (localData.title && localData.artist)) {
-            const songInfo = localData.song || `${localData.artist} - ${localData.title}`;
+            const rawSongInfo = localData.song || `${localData.artist} - ${localData.title}`;
+            const songInfo = decodeHtmlEntities(rawSongInfo);
             console.log(`✅ Local server provided metadata: ${songInfo}`);
             
             // Parse artist and title if available
@@ -124,8 +125,8 @@ router.get('/:stationId', async (req: Request, res: Response) => {
             return res.json({
               success: true,
               song: songInfo,
-              title: localData.title || parsed.title || songInfo,
-              artist: localData.artist || parsed.artist,
+              title: decodeHtmlEntities(localData.title || '') || parsed.title || songInfo,
+              artist: decodeHtmlEntities(localData.artist || '') || parsed.artist,
               source: 'local',
               message: localData.message || 'Enhanced metadata from local server',
               // Pass through any additional local server fields

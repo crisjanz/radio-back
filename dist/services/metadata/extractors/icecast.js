@@ -7,6 +7,7 @@ exports.clearActiveRequests = clearActiveRequests;
 exports.testIcecastMetadata = testIcecastMetadata;
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const icecast_parser_1 = require("icecast-parser");
+const utils_1 = require("../utils");
 const activeRequests = new Map();
 const metadataCache = new Map();
 const REQUEST_CACHE_DURATION = 45000;
@@ -127,8 +128,9 @@ async function extractCurrentTrack(streamUrl) {
             radioStation.on('metadata', (metadata) => {
                 const streamTitle = metadata.get('StreamTitle');
                 if (streamTitle && streamTitle.trim().length > 0) {
-                    console.log(`🎵 Found track: ${streamTitle}`);
-                    safeResolve(streamTitle.trim());
+                    const decodedTitle = (0, utils_1.decodeHtmlEntities)(streamTitle.trim());
+                    console.log(`🎵 Found track: ${decodedTitle}`);
+                    safeResolve(decodedTitle);
                 }
                 else {
                     console.log('🎵 No current track (likely between songs)');

@@ -90,14 +90,15 @@ router.get('/:stationId', async (req, res) => {
                 if (localResponse.ok) {
                     const localData = await localResponse.json();
                     if (localData.song || (localData.title && localData.artist)) {
-                        const songInfo = localData.song || `${localData.artist} - ${localData.title}`;
+                        const rawSongInfo = localData.song || `${localData.artist} - ${localData.title}`;
+                        const songInfo = (0, utils_1.decodeHtmlEntities)(rawSongInfo);
                         console.log(`✅ Local server provided metadata: ${songInfo}`);
                         const parsed = (0, utils_1.parseTrackTitle)(songInfo);
                         return res.json({
                             success: true,
                             song: songInfo,
-                            title: localData.title || parsed.title || songInfo,
-                            artist: localData.artist || parsed.artist,
+                            title: (0, utils_1.decodeHtmlEntities)(localData.title || '') || parsed.title || songInfo,
+                            artist: (0, utils_1.decodeHtmlEntities)(localData.artist || '') || parsed.artist,
                             source: 'local',
                             message: localData.message || 'Enhanced metadata from local server',
                             ...(localData.artwork && { artwork: localData.artwork }),

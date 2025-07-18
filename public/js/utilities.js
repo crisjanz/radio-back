@@ -2,10 +2,10 @@
 // Helper functions, debounce, API calls, and general utilities
 
 // Image URL Priority Helper
-// Priority: local_image_url -> logo -> favicon
+// Priority: local_image_url -> logo (no favicon fallback)
 function getFaviconUrl(station, options = {}) {
-    // Use priority: local_image_url -> logo -> favicon
-    const imageUrl = station.local_image_url || station.logo || station.favicon;
+    // Use priority: local_image_url -> logo (removed favicon fallback)
+    const imageUrl = station.local_image_url || station.logo;
     
     if (!imageUrl || imageUrl.trim() === '') {
         return null;
