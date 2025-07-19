@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
+const station_lookup_1 = require("../utils/station-lookup");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 async function getNextAvailableStationId() {
@@ -181,15 +182,22 @@ router.get('/genres', async (req, res) => {
 });
 router.put('/:id', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        if (idType === 'invalid') {
+            res.status(400).json({ error: 'Invalid station ID format' });
+            return;
+        }
+        const existingStation = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
+            select: { id: true, nanoid: true }
+        });
+        if (!existingStation) {
+            res.status(404).json({ error: 'Station not found' });
             return;
         }
         const updateData = req.body;
         const cleanedData = Object.fromEntries(Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== ''));
         const updatedStation = await prisma.station.update({
-            where: { id },
+            where: { id: existingStation.id },
             data: cleanedData
         });
         res.json(updatedStation);
@@ -201,14 +209,12 @@ router.put('/:id', async (req, res) => {
 });
 router.get('/:id', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        if (idType === 'invalid') {
+            res.status(400).json({ error: 'Invalid station ID format' });
             return;
         }
-        const station = await prisma.station.findUnique({
-            where: { id }
-        });
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
             res.status(404).json({ error: 'Station not found' });
             return;
@@ -273,33 +279,22 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create station' });
     }
 });
-router.put('/:id', async (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ error: 'Invalid station ID' });
-            return;
-        }
-        const station = await prisma.station.update({
-            where: { id },
-            data: req.body
-        });
-        res.json(station);
-    }
-    catch (error) {
-        console.error('❌ Error updating station:', error);
-        res.status(500).json({ error: 'Failed to update station' });
-    }
-});
 router.delete('/:id', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        if (idType === 'invalid') {
+            res.status(400).json({ error: 'Invalid station ID format' });
+            return;
+        }
+        const existingStation = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
+            select: { id: true }
+        });
+        if (!existingStation) {
+            res.status(404).json({ error: 'Station not found' });
             return;
         }
         await prisma.station.delete({
-            where: { id }
+            where: { id: existingStation.id }
         });
         res.json({ success: true });
     }
@@ -310,21 +305,18 @@ router.delete('/:id', async (req, res) => {
 });
 router.post('/:id/calculate-quality', async (req, res) => {
     try {
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) {
-            res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        if (idType === 'invalid') {
+            res.status(400).json({ error: 'Invalid station ID format' });
             return;
         }
-        const station = await prisma.station.findUnique({
-            where: { id }
-        });
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
             res.status(404).json({ error: 'Station not found' });
             return;
         }
-        const feedback = await prisma.stationFeedback.findMany({
-            where: { stationId: id }
-        });
+        const { getStationFeedback } = require('../utils/station-lookup');
+        const feedback = await getStationFeedback(stationIdParam);
         const totalFeedback = feedback.length;
         const streamWorkingReports = feedback.filter(f => f.feedbackType === 'great_station').length;
         const audioQualityReports = feedback.filter(f => f.feedbackType !== 'poor_audio_quality').length;
@@ -356,13 +348,13 @@ router.post('/:id/calculate-quality', async (req, res) => {
             breakdown.informationAccuracy + breakdown.userSatisfaction +
             breakdown.metadataRichness;
         await prisma.station.update({
-            where: { id },
+            where: { id: station.id },
             data: {
                 qualityScore,
                 feedbackCount: totalFeedback
             }
         });
-        console.log(`✅ Quality score calculated for station ${id}: ${qualityScore.toFixed(2)}%`);
+        console.log(`✅ Quality score calculated for station ${station.id}: ${qualityScore.toFixed(2)}%`);
         res.json({
             qualityScore,
             feedbackCount: totalFeedback,

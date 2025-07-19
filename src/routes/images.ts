@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
 import { supabase, getSupabaseImageUrl, getImageFileName, getSupabaseImagePath } from '../config/supabase';
+import { findStationByEitherId, parseStationIdParam } from '../utils/station-lookup';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -140,20 +141,20 @@ router.post('/download', async (req: Request, res: Response) => {
   }
 });
 
-// Download and store favicon for a station
+// Download and store favicon for a station (supports both numeric and nanoid)
 router.post('/download/:stationId', async (req: Request, res: Response) => {
   try {
-    const stationId = parseInt(req.params.stationId);
-    if (isNaN(stationId)) {
-      return res.status(400).json({ error: 'Invalid station ID' });
+    const { stationIdParam, idType } = parseStationIdParam({ params: { id: req.params.stationId } });
+    
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
     }
 
     const { url: bodyUrl, size = 512 } = req.body; // Accept URL from request body
     const queryUrl = req.query.url as string; // Also accept URL from query parameters
     const url = queryUrl || bodyUrl; // Query parameters take precedence
 
-    const station = await prisma.station.findUnique({
-      where: { id: stationId },
+    const station = await findStationByEitherId(stationIdParam, {
       select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
     });
 
@@ -177,7 +178,7 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
     }
 
     const isForceRedownload = req.query.force === 'true';
-    console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${stationId}: ${imageUrl}`);
+    console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${station.id}: ${imageUrl}`);
 
     // Download the image
     const response = await fetch(imageUrl, {
@@ -253,13 +254,13 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
     }
 
     // Upload to Supabase
-    console.log(`📸 About to upload image for station ${stationId}, buffer size: ${processedImageBuffer.length}`);
-    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, stationId, 'png');
+    console.log(`📸 About to upload image for station ${station.id}, buffer size: ${processedImageBuffer.length}`);
+    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
     console.log(`🎯 Upload completed, URL: ${supabaseImageUrl}`);
     
     // Update local_image_url with Supabase URL, preserve original URLs
     await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: { 
         local_image_url: supabaseImageUrl
         // Keep original favicon and logo URLs intact for fallback
@@ -289,14 +290,15 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
   }
 });
 
-// Upload edited image for a station
+// Upload edited image for a station (supports both numeric and nanoid)
 router.post('/upload/:stationId', upload.single('image'), async (req: Request, res: Response) => {
   try {
     console.log(`📥 Upload request for station ${req.params.stationId}`);
-    const stationId = parseInt(req.params.stationId);
-    if (isNaN(stationId)) {
-      console.log('❌ Invalid station ID');
-      return res.status(400).json({ error: 'Invalid station ID' });
+    const { stationIdParam, idType } = parseStationIdParam({ params: { id: req.params.stationId } });
+    
+    if (idType === 'invalid') {
+      console.log('❌ Invalid station ID format');
+      return res.status(400).json({ error: 'Invalid station ID format' });
     }
 
     if (!req.file) {
@@ -306,8 +308,7 @@ router.post('/upload/:stationId', upload.single('image'), async (req: Request, r
 
     console.log(`📄 File info: ${req.file.filename}, size: ${req.file.size}, path: ${req.file.path}`);
 
-    const station = await prisma.station.findUnique({
-      where: { id: stationId },
+    const station = await findStationByEitherId(stationIdParam, {
       select: { id: true, name: true }
     });
 
@@ -332,14 +333,14 @@ router.post('/upload/:stationId', upload.single('image'), async (req: Request, r
     fs.unlinkSync(req.file.path);
 
     // Upload to Supabase
-    console.log(`📤 Uploading processed image to Supabase for station ${stationId}`);
-    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, stationId, 'png');
+    console.log(`📤 Uploading processed image to Supabase for station ${station.id}`);
+    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
     console.log(`✅ Supabase upload successful: ${supabaseImageUrl}`);
 
     // Update database with Supabase image URL
-    console.log(`📝 Updating database for station ${stationId}`);
+    console.log(`📝 Updating database for station ${station.id}`);
     await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: { local_image_url: supabaseImageUrl }
     });
     console.log(`✅ Database updated successfully`);
@@ -471,16 +472,16 @@ router.post('/batch-download', async (req: Request, res: Response) => {
   }
 });
 
-// Get image info for a station
+// Get image info for a station (supports both numeric and nanoid)
 router.get('/info/:stationId', async (req: Request, res: Response) => {
   try {
-    const stationId = parseInt(req.params.stationId);
-    if (isNaN(stationId)) {
-      return res.status(400).json({ error: 'Invalid station ID' });
+    const { stationIdParam, idType } = parseStationIdParam({ params: { id: req.params.stationId } });
+    
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
     }
 
-    const station = await prisma.station.findUnique({
-      where: { id: stationId },
+    const station = await findStationByEitherId(stationIdParam, {
       select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
     });
 

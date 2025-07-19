@@ -461,7 +461,7 @@
             document.getElementById('stat-active').textContent = activeCount;
         }
 
-        function filterStations() {
+        function filterStations(resetPage = true) {
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
             const statusFilter = document.getElementById('filter-status').value;
             const logoFilter = document.getElementById('filter-logo').value;
@@ -494,8 +494,10 @@
                 return true;
             });
 
-            // Reset to page 1 when filtering
-            currentPage = 1;
+            // Only reset to page 1 when actually filtering (not just refreshing data)
+            if (resetPage) {
+                currentPage = 1;
+            }
             renderStations();
         }
 
@@ -734,7 +736,7 @@
                     if (station) {
                         station.isActive = isActive;
                         updateStats();
-                        filterStations();
+                        filterStations(false); // Don't reset page when just updating data
                     }
                 } else {
                     console.error('Failed to update station status');
@@ -798,7 +800,7 @@
                     if (station) {
                         station.logo = logoUrl;
                         updateStats();
-                        filterStations();
+                        filterStations(false); // Don't reset page when just updating data
                     }
                     closeLogoEditModal();
                 } else {
@@ -1049,7 +1051,7 @@
             hideLoading();
             alert(`${updated} stations have been disabled.`);
             updateStats();
-            filterStations();
+            filterStations(false); // Don't reset page when just updating data
         }
 
         function clearFilters() {

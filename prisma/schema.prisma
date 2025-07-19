@@ -22,20 +22,23 @@ model User {
 }
 
 model UserFavorites {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  stationId  Int
-  createdAt  DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  stationId     Int      // Legacy reference during transition
+  stationNanoid String?  @db.VarChar(8) // New NanoID reference
+  createdAt     DateTime @default(now())
   
   // Relations
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Unique constraint to prevent duplicate favorites
+  // Unique constraint to prevent duplicate favorites (keep both for transition)
   @@unique([userId, stationId])
+  @@unique([userId, stationNanoid])
 }
 
 model Station {
   id              Int     @id @default(autoincrement())
+  nanoid          String? @unique @db.VarChar(8) // New NanoID field for transition
   name            String
   country         String
   genre           String?
@@ -100,16 +103,17 @@ model Station {
 }
 
 model StationFeedback {
-  id           Int      @id @default(autoincrement())
-  stationId    Int
-  userId       Int?     // Optional - allow anonymous feedback
-  feedbackType String   // 'stream_not_working', 'poor_audio_quality', 'wrong_information', 'great_station', 'song_info_missing'
-  details      String?  // Additional feedback details
-  ipAddress    String?  // For rate limiting anonymous feedback
-  resolved     Boolean  @default(false) // Whether the feedback has been addressed
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
+  id            Int      @id @default(autoincrement())
+  stationId     Int      // Legacy reference during transition
+  stationNanoid String?  @db.VarChar(8) // New NanoID reference
+  userId        Int?     // Optional - allow anonymous feedback
+  feedbackType  String   // 'stream_not_working', 'poor_audio_quality', 'wrong_information', 'great_station', 'song_info_missing'
+  details       String?  // Additional feedback details
+  ipAddress     String?  // For rate limiting anonymous feedback
+  resolved      Boolean  @default(false) // Whether the feedback has been addressed
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
   
   // Relations
-  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

@@ -10,6 +10,7 @@ const sharp_1 = __importDefault(require("sharp"));
 const fs_1 = __importDefault(require("fs"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const supabase_1 = require("../config/supabase");
+const station_lookup_1 = require("../utils/station-lookup");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 const upload = (0, multer_1.default)({
@@ -111,15 +112,14 @@ router.post('/download', async (req, res) => {
 });
 router.post('/download/:stationId', async (req, res) => {
     try {
-        const stationId = parseInt(req.params.stationId);
-        if (isNaN(stationId)) {
-            return res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
+        if (idType === 'invalid') {
+            return res.status(400).json({ error: 'Invalid station ID format' });
         }
         const { url: bodyUrl, size = 512 } = req.body;
         const queryUrl = req.query.url;
         const url = queryUrl || bodyUrl;
-        const station = await prisma.station.findUnique({
-            where: { id: stationId },
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {
@@ -138,7 +138,7 @@ router.post('/download/:stationId', async (req, res) => {
             return res.status(400).json({ error: 'No favicon or logo URL found for station' });
         }
         const isForceRedownload = req.query.force === 'true';
-        console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${stationId}: ${imageUrl}`);
+        console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${station.id}: ${imageUrl}`);
         const response = await (0, node_fetch_1.default)(imageUrl, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -192,11 +192,11 @@ router.post('/download/:stationId', async (req, res) => {
                 .png({ quality: 90 })
                 .toBuffer();
         }
-        console.log(`📸 About to upload image for station ${stationId}, buffer size: ${processedImageBuffer.length}`);
-        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, stationId, 'png');
+        console.log(`📸 About to upload image for station ${station.id}, buffer size: ${processedImageBuffer.length}`);
+        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
         console.log(`🎯 Upload completed, URL: ${supabaseImageUrl}`);
         await prisma.station.update({
-            where: { id: stationId },
+            where: { id: station.id },
             data: {
                 local_image_url: supabaseImageUrl
             }
@@ -225,18 +225,17 @@ router.post('/download/:stationId', async (req, res) => {
 router.post('/upload/:stationId', upload.single('image'), async (req, res) => {
     try {
         console.log(`📥 Upload request for station ${req.params.stationId}`);
-        const stationId = parseInt(req.params.stationId);
-        if (isNaN(stationId)) {
-            console.log('❌ Invalid station ID');
-            return res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
+        if (idType === 'invalid') {
+            console.log('❌ Invalid station ID format');
+            return res.status(400).json({ error: 'Invalid station ID format' });
         }
         if (!req.file) {
             console.log('❌ No image file provided');
             return res.status(400).json({ error: 'No image file provided' });
         }
         console.log(`📄 File info: ${req.file.filename}, size: ${req.file.size}, path: ${req.file.path}`);
-        const station = await prisma.station.findUnique({
-            where: { id: stationId },
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, name: true }
         });
         if (!station) {
@@ -250,12 +249,12 @@ router.post('/upload/:stationId', upload.single('image'), async (req, res) => {
         const processedMetadata = await (0, sharp_1.default)(processedImageBuffer).metadata();
         console.log(`📋 Processed image: ${processedMetadata.width}x${processedMetadata.height}, format: ${processedMetadata.format}, hasAlpha: ${processedMetadata.hasAlpha}`);
         fs_1.default.unlinkSync(req.file.path);
-        console.log(`📤 Uploading processed image to Supabase for station ${stationId}`);
-        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, stationId, 'png');
+        console.log(`📤 Uploading processed image to Supabase for station ${station.id}`);
+        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
         console.log(`✅ Supabase upload successful: ${supabaseImageUrl}`);
-        console.log(`📝 Updating database for station ${stationId}`);
+        console.log(`📝 Updating database for station ${station.id}`);
         await prisma.station.update({
-            where: { id: stationId },
+            where: { id: station.id },
             data: { local_image_url: supabaseImageUrl }
         });
         console.log(`✅ Database updated successfully`);
@@ -367,12 +366,11 @@ router.post('/batch-download', async (req, res) => {
 });
 router.get('/info/:stationId', async (req, res) => {
     try {
-        const stationId = parseInt(req.params.stationId);
-        if (isNaN(stationId)) {
-            return res.status(400).json({ error: 'Invalid station ID' });
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
+        if (idType === 'invalid') {
+            return res.status(400).json({ error: 'Invalid station ID format' });
         }
-        const station = await prisma.station.findUnique({
-            where: { id: stationId },
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {

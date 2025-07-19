@@ -1,6 +1,8 @@
 // stations.ts
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { findStationByEitherId, parseStationIdParam, getPreferredStationId } from '../utils/station-lookup';
+import { generateStationId } from '../utils/nanoid';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -210,13 +212,23 @@ router.get('/genres', async (req: Request, res: Response) => {
   }
 });
 
-// Update station by ID
+// Update station by ID (supports both numeric and nanoid)
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid station ID' });
+    if (idType === 'invalid') {
+      res.status(400).json({ error: 'Invalid station ID format' });
+      return;
+    }
+
+    // First, verify the station exists and get its current data
+    const existingStation = await findStationByEitherId(stationIdParam, {
+      select: { id: true, nanoid: true }
+    });
+    
+    if (!existingStation) {
+      res.status(404).json({ error: 'Station not found' });
       return;
     }
 
@@ -227,8 +239,9 @@ router.put('/:id', async (req: Request, res: Response) => {
       Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
     );
 
+    // Update using the numeric ID (primary key)
     const updatedStation = await prisma.station.update({
-      where: { id },
+      where: { id: existingStation.id },
       data: cleanedData
     });
 
@@ -239,19 +252,17 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Get single station by ID
+// Get single station by ID (supports both numeric and nanoid)
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid station ID' });
+    if (idType === 'invalid') {
+      res.status(400).json({ error: 'Invalid station ID format' });
       return;
     }
 
-    const station = await prisma.station.findUnique({
-      where: { id }
-    });
+    const station = await findStationByEitherId(stationIdParam);
 
     if (!station) {
       res.status(404).json({ error: 'Station not found' });
@@ -329,40 +340,31 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// Update station
-router.put('/:id', async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid station ID' });
-      return;
-    }
+// Removed duplicate PUT route - consolidated above
 
-    const station = await prisma.station.update({
-      where: { id },
-      data: req.body
-    });
-    
-    res.json(station);
-  } catch (error) {
-    console.error('❌ Error updating station:', error);
-    res.status(500).json({ error: 'Failed to update station' });
-  }
-});
-
-// Delete station
+// Delete station (supports both numeric and nanoid)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid station ID' });
+    if (idType === 'invalid') {
+      res.status(400).json({ error: 'Invalid station ID format' });
       return;
     }
 
+    // First, verify the station exists and get its numeric ID
+    const existingStation = await findStationByEitherId(stationIdParam, {
+      select: { id: true }
+    });
+    
+    if (!existingStation) {
+      res.status(404).json({ error: 'Station not found' });
+      return;
+    }
+
+    // Delete using the numeric ID (primary key)
     await prisma.station.delete({
-      where: { id }
+      where: { id: existingStation.id }
     });
     
     res.json({ success: true });
@@ -372,30 +374,27 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Calculate quality score for a station
+// Calculate quality score for a station (supports both numeric and nanoid)
 router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     
-    if (isNaN(id)) {
-      res.status(400).json({ error: 'Invalid station ID' });
+    if (idType === 'invalid') {
+      res.status(400).json({ error: 'Invalid station ID format' });
       return;
     }
 
     // Get station data
-    const station = await prisma.station.findUnique({
-      where: { id }
-    });
+    const station = await findStationByEitherId(stationIdParam);
 
     if (!station) {
       res.status(404).json({ error: 'Station not found' });
       return;
     }
 
-    // Get feedback data for this station
-    const feedback = await prisma.stationFeedback.findMany({
-      where: { stationId: id }
-    });
+    // Get feedback data for this station using dual lookup
+    const { getStationFeedback } = require('../utils/station-lookup');
+    const feedback = await getStationFeedback(stationIdParam);
 
     // Calculate quality score based on the algorithm from homescreen-plan.txt
     const totalFeedback = feedback.length;
@@ -442,16 +441,16 @@ router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
                    breakdown.informationAccuracy + breakdown.userSatisfaction + 
                    breakdown.metadataRichness;
 
-    // Update station with calculated quality score
+    // Update station with calculated quality score using numeric ID
     await prisma.station.update({
-      where: { id },
+      where: { id: station.id },
       data: {
         qualityScore,
         feedbackCount: totalFeedback
       }
     });
 
-    console.log(`✅ Quality score calculated for station ${id}: ${qualityScore.toFixed(2)}%`);
+    console.log(`✅ Quality score calculated for station ${station.id}: ${qualityScore.toFixed(2)}%`);
 
     res.json({
       qualityScore,

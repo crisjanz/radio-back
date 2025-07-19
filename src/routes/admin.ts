@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import fetch from 'node-fetch';
+import { findStationByEitherId, parseStationIdParam } from '../utils/station-lookup';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -300,22 +301,24 @@ router.get('/stats', async (req: Request, res: Response) => {
   }
 });
 
-// Enable/disable a station
+// Enable/disable a station (supports both numeric and nanoid)
 router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const stationId = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     const { isActive, adminNotes } = req.body;
     
-    const station = await prisma.station.findUnique({
-      where: { id: stationId }
-    });
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
+    }
+    
+    const station = await findStationByEitherId(stationIdParam);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
     }
     
     const updatedStation = await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: {
         isActive: isActive !== undefined ? isActive : !station.isActive,
         adminNotes: adminNotes || station.adminNotes,
@@ -345,14 +348,26 @@ router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: R
   }
 });
 
-// Update station admin notes
+// Update station admin notes (supports both numeric and nanoid)
 router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const stationId = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     const { adminNotes } = req.body;
     
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
+    }
+    
+    const station = await findStationByEitherId(stationIdParam, {
+      select: { id: true }
+    });
+    
+    if (!station) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
+    
     const updatedStation = await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: {
         adminNotes,
         updatedAt: new Date()
@@ -361,7 +376,7 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
     
     return res.json({
       success: true,
-      stationId,
+      stationId: station.id,
       adminNotes: updatedStation.adminNotes
     });
     
@@ -374,13 +389,25 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
   }
 });
 
-// Reset user reports for a station
+// Reset user reports for a station (supports both numeric and nanoid)
 router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const stationId = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
+    
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
+    }
+    
+    const station = await findStationByEitherId(stationIdParam, {
+      select: { id: true }
+    });
+    
+    if (!station) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
     
     const updatedStation = await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: {
         userReports: 0,
         updatedAt: new Date()
@@ -389,7 +416,7 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
     
     return res.json({
       success: true,
-      stationId,
+      stationId: station.id,
       userReports: updatedStation.userReports
     });
     
@@ -402,21 +429,23 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
   }
 });
 
-// Report a station as not working (user endpoint)
+// Report a station as not working (user endpoint) - supports both numeric and nanoid
 router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const stationId = parseInt(req.params.id);
+    const { stationIdParam, idType } = parseStationIdParam(req);
     
-    const station = await prisma.station.findUnique({
-      where: { id: stationId }
-    });
+    if (idType === 'invalid') {
+      return res.status(400).json({ error: 'Invalid station ID format' });
+    }
+    
+    const station = await findStationByEitherId(stationIdParam);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
     }
     
     const updatedStation = await prisma.station.update({
-      where: { id: stationId },
+      where: { id: station.id },
       data: {
         userReports: station.userReports + 1,
         updatedAt: new Date()
@@ -428,7 +457,7 @@ router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Re
     return res.json({
       success: true,
       message: 'Report submitted successfully',
-      stationId,
+      stationId: station.id,
       totalReports: updatedStation.userReports
     });
     

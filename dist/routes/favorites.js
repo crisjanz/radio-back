@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const client_1 = require("@prisma/client");
+const station_lookup_1 = require("../utils/station-lookup");
 const router = express_1.default.Router();
 const prisma = new client_1.PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
@@ -50,31 +51,61 @@ router.get('/', authenticateToken, async (req, res) => {
             }
         });
         const favoritesWithStations = await Promise.all(favorites.map(async (favorite) => {
-            const station = await prisma.station.findUnique({
-                where: { id: favorite.stationId },
-                select: {
-                    id: true,
-                    name: true,
-                    country: true,
-                    genre: true,
-                    type: true,
-                    streamUrl: true,
-                    favicon: true,
-                    logo: true,
-                    homepage: true,
-                    city: true,
-                    state: true,
-                    description: true,
-                    language: true,
-                    frequency: true,
-                    bitrate: true,
-                    codec: true,
-                    isActive: true
-                }
-            });
+            let station = null;
+            if (favorite.stationNanoid) {
+                station = await prisma.station.findUnique({
+                    where: { nanoid: favorite.stationNanoid },
+                    select: {
+                        id: true,
+                        nanoid: true,
+                        name: true,
+                        country: true,
+                        genre: true,
+                        type: true,
+                        streamUrl: true,
+                        favicon: true,
+                        logo: true,
+                        homepage: true,
+                        city: true,
+                        state: true,
+                        description: true,
+                        language: true,
+                        frequency: true,
+                        bitrate: true,
+                        codec: true,
+                        isActive: true
+                    }
+                });
+            }
+            if (!station && favorite.stationId) {
+                station = await prisma.station.findUnique({
+                    where: { id: favorite.stationId },
+                    select: {
+                        id: true,
+                        nanoid: true,
+                        name: true,
+                        country: true,
+                        genre: true,
+                        type: true,
+                        streamUrl: true,
+                        favicon: true,
+                        logo: true,
+                        homepage: true,
+                        city: true,
+                        state: true,
+                        description: true,
+                        language: true,
+                        frequency: true,
+                        bitrate: true,
+                        codec: true,
+                        isActive: true
+                    }
+                });
+            }
             return {
                 id: favorite.id,
                 stationId: favorite.stationId,
+                stationNanoid: favorite.stationNanoid,
                 createdAt: favorite.createdAt,
                 station: station
             };
@@ -94,13 +125,14 @@ router.post('/', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
         const { stationId } = req.body;
-        if (!stationId || typeof stationId !== 'number') {
-            return res.status(400).json({ error: 'Valid stationId is required' });
+        if (!stationId) {
+            return res.status(400).json({ error: 'stationId is required' });
         }
-        const station = await prisma.station.findUnique({
-            where: { id: stationId },
+        const stationIdParam = stationId.toString();
+        const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: {
                 id: true,
+                nanoid: true,
                 name: true,
                 country: true,
                 genre: true,
@@ -110,36 +142,17 @@ router.post('/', authenticateToken, async (req, res) => {
         if (!station) {
             return res.status(404).json({ error: 'Station not found' });
         }
-        const existingFavorite = await prisma.userFavorites.findUnique({
-            where: {
-                userId_stationId: {
-                    userId,
-                    stationId
-                }
-            }
-        });
+        const existingFavorite = await (0, station_lookup_1.findUserFavoriteByStationId)(userId, stationIdParam);
         if (existingFavorite) {
             return res.status(409).json({ error: 'Station already in favorites' });
         }
-        const favorite = await prisma.userFavorites.create({
-            data: {
-                userId,
-                stationId
-            },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        email: true
-                    }
-                }
-            }
-        });
+        const favorite = await (0, station_lookup_1.toggleUserFavorite)(userId, stationIdParam, 'add');
         res.status(201).json({
             message: 'Station added to favorites',
             favorite: {
                 id: favorite.id,
                 stationId: favorite.stationId,
+                stationNanoid: favorite.stationNanoid,
                 createdAt: favorite.createdAt,
                 station: station
             }
@@ -153,29 +166,16 @@ router.post('/', authenticateToken, async (req, res) => {
 router.delete('/:stationId', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const stationId = parseInt(req.params.stationId, 10);
-        if (isNaN(stationId)) {
-            return res.status(400).json({ error: 'Invalid stationId' });
+        const stationIdParam = req.params.stationId;
+        const { idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: stationIdParam } });
+        if (idType === 'invalid') {
+            return res.status(400).json({ error: 'Invalid stationId format' });
         }
-        const existingFavorite = await prisma.userFavorites.findUnique({
-            where: {
-                userId_stationId: {
-                    userId,
-                    stationId
-                }
-            }
-        });
+        const existingFavorite = await (0, station_lookup_1.findUserFavoriteByStationId)(userId, stationIdParam);
         if (!existingFavorite) {
             return res.status(404).json({ error: 'Favorite not found' });
         }
-        await prisma.userFavorites.delete({
-            where: {
-                userId_stationId: {
-                    userId,
-                    stationId
-                }
-            }
-        });
+        await (0, station_lookup_1.toggleUserFavorite)(userId, stationIdParam, 'remove');
         res.json({ message: 'Station removed from favorites' });
     }
     catch (error) {

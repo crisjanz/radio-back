@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
+import { findStationByEitherId, parseStationIdParam, createStationFeedback, getStationFeedback, getStationReferenceFields } from '../utils/station-lookup';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -66,10 +67,8 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
       return res.status(400).json({ error: 'Invalid feedback type' });
     }
 
-    // Check if station exists
-    const station = await prisma.station.findUnique({
-      where: { id: parseInt(stationId) }
-    });
+    // Check if station exists using dual lookup
+    const station = await findStationByEitherId(stationId);
 
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
@@ -89,9 +88,18 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       
+      // Get station reference fields for database operations
+      const stationRefs = await getStationReferenceFields(stationId);
+      if (!stationRefs) {
+        return res.status(404).json({ error: 'Station not found' });
+      }
+
       const existingFeedback = await prisma.stationFeedback.findFirst({
         where: {
-          stationId: parseInt(stationId),
+          OR: [
+            { stationId: stationRefs.stationId },
+            ...(stationRefs.stationNanoid ? [{ stationNanoid: stationRefs.stationNanoid }] : [])
+          ],
           feedbackType,
           createdAt: { gte: oneHourAgo },
           ...(userId ? { userId } : { ipAddress: clientIp })
@@ -104,19 +112,16 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
         });
       }
 
-      // Create feedback entry
-      const feedback = await prisma.stationFeedback.create({
-        data: {
-          stationId: parseInt(stationId),
-          userId: userId || null,
-          feedbackType,
-          details: details || null,
-          ipAddress: userId ? null : clientIp, // Only store IP for anonymous users
-        }
+      // Create feedback entry using dual reference utility
+      const feedback = await createStationFeedback(stationId, {
+        userId: userId || null,
+        feedbackType,
+        details: details || null,
+        ipAddress: userId ? null : clientIp, // Only store IP for anonymous users
       });
 
       // Update station quality metrics
-      await updateStationQualityScore(parseInt(stationId));
+      await updateStationQualityScore(station.id);
 
       res.status(201).json({ 
         success: true, 
@@ -131,32 +136,38 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
   }
 });
 
-// Get station feedback summary (for admin or public stats)
+// Get station feedback summary (for admin or public stats) - supports both numeric and nanoid
 router.get('/stations/:stationId/summary', async (req, res) => {
   try {
     const { stationId } = req.params;
 
-    const feedbackSummary = await prisma.stationFeedback.groupBy({
-      by: ['feedbackType'],
-      where: { stationId: parseInt(stationId) },
-      _count: { feedbackType: true }
-    });
-
-    const station = await prisma.station.findUnique({
-      where: { id: parseInt(stationId) },
+    // Find station using dual lookup
+    const station = await findStationByEitherId(stationId, {
       select: {
+        id: true,
+        nanoid: true,
         qualityScore: true,
         feedbackCount: true
       }
     });
 
+    if (!station) {
+      return res.status(404).json({ error: 'Station not found' });
+    }
+
+    // Get feedback using dual reference lookup
+    const feedbackList = await getStationFeedback(stationId);
+    
+    // Group feedback by type
+    const feedbackSummary = feedbackList.reduce((acc, feedback) => {
+      acc[feedback.feedbackType] = (acc[feedback.feedbackType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     res.json({
-      feedbackSummary: feedbackSummary.reduce((acc, item) => {
-        acc[item.feedbackType] = item._count.feedbackType;
-        return acc;
-      }, {} as Record<string, number>),
-      qualityScore: station?.qualityScore,
-      totalFeedback: station?.feedbackCount || 0
+      feedbackSummary,
+      qualityScore: station.qualityScore,
+      totalFeedback: station.feedbackCount || 0
     });
 
   } catch (error) {
@@ -235,13 +246,26 @@ router.get('/user/history', async (req, res) => {
       take: 50 // Limit to last 50 feedback items
     });
 
-    // Get station info separately
+    // Get station info separately using dual lookup
     const feedbackWithStations = await Promise.all(
       userFeedback.map(async (feedback) => {
-        const station = await prisma.station.findUnique({
-          where: { id: feedback.stationId },
-          select: { id: true, name: true }
-        });
+        let station = null;
+        
+        // Try nanoid first, fallback to stationId
+        if (feedback.stationNanoid) {
+          station = await prisma.station.findUnique({
+            where: { nanoid: feedback.stationNanoid },
+            select: { id: true, nanoid: true, name: true }
+          });
+        }
+        
+        if (!station && feedback.stationId) {
+          station = await prisma.station.findUnique({
+            where: { id: feedback.stationId },
+            select: { id: true, nanoid: true, name: true }
+          });
+        }
+        
         return { ...feedback, station };
       })
     );
@@ -271,13 +295,26 @@ router.get('/admin/pending', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Get station info separately since we don't have the relation set up
+    // Get station info separately using dual lookup
     const feedbackWithStations = await Promise.all(
       pendingFeedback.map(async (feedback) => {
-        const station = await prisma.station.findUnique({
-          where: { id: feedback.stationId },
-          select: { id: true, name: true, isActive: true }
-        });
+        let station = null;
+        
+        // Try nanoid first, fallback to stationId
+        if (feedback.stationNanoid) {
+          station = await prisma.station.findUnique({
+            where: { nanoid: feedback.stationNanoid },
+            select: { id: true, nanoid: true, name: true, isActive: true }
+          });
+        }
+        
+        if (!station && feedback.stationId) {
+          station = await prisma.station.findUnique({
+            where: { id: feedback.stationId },
+            select: { id: true, nanoid: true, name: true, isActive: true }
+          });
+        }
+        
         return { ...feedback, station };
       })
     );
