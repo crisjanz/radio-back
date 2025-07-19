@@ -13,7 +13,6 @@ const COUNTRY_MAPPINGS: Record<string, string> = {
   'u.s.': 'USA',
   'u.s.a.': 'USA',
   'america': 'USA',
-  'united states of america': 'USA',
   
   // Add other common variations as needed
   'uk': 'United Kingdom',
