@@ -20,6 +20,7 @@ const test_js_1 = __importDefault(require("./routes/test.js"));
 const images_js_1 = __importDefault(require("./routes/images.js"));
 const image_proxy_js_1 = __importDefault(require("./routes/image-proxy.js"));
 const memory_js_1 = __importDefault(require("./routes/memory.js"));
+const feedback_js_1 = __importDefault(require("./routes/feedback.js"));
 const memoryMonitor_js_1 = require("./middleware/memoryMonitor.js");
 const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
@@ -45,6 +46,7 @@ app.use('/api/test', test_js_1.default);
 app.use('/images', images_js_1.default);
 app.use('/image-proxy', image_proxy_js_1.default);
 app.use('/memory', memory_js_1.default);
+app.use('/api/feedback', feedback_js_1.default);
 app.get('/admin/stations', (req, res) => {
     res.sendFile('admin-stations.html', { root: 'public' });
 });
@@ -65,6 +67,9 @@ app.get('/admin/iheart-import', (req, res) => {
 });
 app.get('/admin/cleanup', (req, res) => {
     res.sendFile('admin-cleanup.html', { root: 'public' });
+});
+app.get('/admin/logo-manager', (req, res) => {
+    res.sendFile('admin-logo-manager.html', { root: 'public' });
 });
 app.get('/ping', async (req, res) => {
     try {
@@ -171,6 +176,7 @@ app.listen(PORT, HOST, () => {
     console.log("   • /health - Stream health checking endpoints");
     console.log("   • /auth - Authentication endpoints");
     console.log("   • /api/favorites - User favorites endpoints");
+    console.log("   • /api/feedback - Station feedback and rating system");
     console.log("   • /images - Image management and processing endpoints");
     console.log("   • /memory - Memory monitoring endpoints");
     console.log("   • /station-images - Static image serving");

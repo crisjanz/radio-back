@@ -17,6 +17,7 @@ import testRoutes from './routes/test.js';
 import imageRoutes from './routes/images.js';
 import imageProxyRoutes from './routes/image-proxy.js';
 import memoryRoutes from './routes/memory.js';
+import feedbackRoutes from './routes/feedback.js';
 import { memoryMonitor } from './middleware/memoryMonitor.js';
 import path from 'path';
 
@@ -51,6 +52,7 @@ app.use('/api/test', testRoutes);
 app.use('/images', imageRoutes);
 app.use('/image-proxy', imageProxyRoutes);
 app.use('/memory', memoryRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Admin routes for static HTML pages
 app.get('/admin/stations', (req: Request, res: Response) => {
@@ -208,6 +210,7 @@ app.listen(PORT, HOST, () => {
   console.log("   • /health - Stream health checking endpoints");
   console.log("   • /auth - Authentication endpoints");
   console.log("   • /api/favorites - User favorites endpoints");
+  console.log("   • /api/feedback - Station feedback and rating system");
   console.log("   • /images - Image management and processing endpoints");
   console.log("   • /memory - Memory monitoring endpoints");
   console.log("   • /station-images - Static image serving");
