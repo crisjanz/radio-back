@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { detectStreamMetadata } from '../services/metadata';
 import { parseTrackTitle, decodeHtmlEntities } from '../services/metadata/utils';
 import { PrismaClient } from '@prisma/client';
+import { findStationByEitherId, parseStationIdParam } from '../utils/station-lookup';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -67,10 +68,9 @@ router.get('/:stationId', async (req: Request, res: Response) => {
   try {
     console.log(`🎵 Frontend requesting metadata for station: ${stationId}`);
     
-    // Get station details from database to extract stream URL
-    const station = await prisma.station.findUnique({
-      where: { id: parseInt(stationId) },
-      select: { streamUrl: true, name: true }
+    // Get station details from database using dual ID lookup
+    const station = await findStationByEitherId(stationId, {
+      select: { streamUrl: true, name: true, nanoid: true, id: true }
     });
     
     if (!station || !station.streamUrl) {
@@ -80,7 +80,7 @@ router.get('/:stationId', async (req: Request, res: Response) => {
       });
     }
     
-    console.log(`🔍 Found station "${station.name}" with stream URL: ${station.streamUrl}`);
+    console.log(`🔍 Found station "${station.name}" (${station.nanoid || station.id}) with stream URL: ${station.streamUrl}`);
     
     // Try local metadata server first if configured
     // Auto-detect environment and use appropriate URL
@@ -95,12 +95,14 @@ router.get('/:stationId', async (req: Request, res: Response) => {
     }
     if (localMetadataUrl) {
       try {
-        console.log(`🏠 Trying local metadata server: ${localMetadataUrl}/metadata/${stationId}`);
+        // Use NanoID if available, otherwise use numeric ID
+        const metadataStationId = station.nanoid || station.id;
+        console.log(`🏠 Trying local metadata server: ${localMetadataUrl}/metadata/${metadataStationId}`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
         
-        const localResponse = await fetch(`${localMetadataUrl}/metadata/${stationId}`, {
+        const localResponse = await fetch(`${localMetadataUrl}/metadata/${metadataStationId}`, {
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',

@@ -28,10 +28,10 @@ export const getSupabaseImageUrl = (fileName: string, options?: { width?: number
   return baseUrl;
 };
 
-export const getImageFileName = (stationId: number, extension: string = 'png'): string => {
-  return `${stationId}.${extension}`;
+export const getImageFileName = (stationIdentifier: number | string, extension: string = 'png'): string => {
+  return `${stationIdentifier}.${extension}`;
 };
 
-export const getSupabaseImagePath = (stationId: number, extension: string = 'png'): string => {
-  return `station-images/${getImageFileName(stationId, extension)}`;
+export const getSupabaseImagePath = (stationIdentifier: number | string, extension: string = 'png'): string => {
+  return `station-images/${getImageFileName(stationIdentifier, extension)}`;
 };

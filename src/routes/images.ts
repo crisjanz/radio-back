@@ -18,11 +18,13 @@ const upload = multer({
 });
 
 // Helper function to upload image buffer to Supabase
-const uploadImageToSupabase = async (imageBuffer: Buffer, stationId: number, extension: string = 'png'): Promise<string> => {
-  const fileName = getImageFileName(stationId, extension);
-  const filePath = getSupabaseImagePath(stationId, extension);
+const uploadImageToSupabase = async (imageBuffer: Buffer, stationId: number, stationNanoid: string | null, extension: string = 'png'): Promise<string> => {
+  // Use NanoID if available, otherwise fall back to numeric ID
+  const identifier = stationNanoid || stationId;
+  const fileName = getImageFileName(identifier, extension);
+  const filePath = getSupabaseImagePath(identifier, extension);
   
-  console.log(`🔄 Uploading to Supabase - Station: ${stationId}, Path: ${filePath}, Size: ${imageBuffer.length} bytes`);
+  console.log(`🔄 Uploading to Supabase - Station: ${stationId} (${stationNanoid || 'no nanoid'}), Path: ${filePath}, Size: ${imageBuffer.length} bytes`);
   
   // Upload to Supabase storage
   const { data, error } = await supabase.storage
@@ -155,7 +157,7 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
     const url = queryUrl || bodyUrl; // Query parameters take precedence
 
     const station = await findStationByEitherId(stationIdParam, {
-      select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
+      select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
     });
 
     if (!station) {
@@ -255,7 +257,7 @@ router.post('/download/:stationId', async (req: Request, res: Response) => {
 
     // Upload to Supabase
     console.log(`📸 About to upload image for station ${station.id}, buffer size: ${processedImageBuffer.length}`);
-    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
     console.log(`🎯 Upload completed, URL: ${supabaseImageUrl}`);
     
     // Update local_image_url with Supabase URL, preserve original URLs
@@ -309,7 +311,7 @@ router.post('/upload/:stationId', upload.single('image'), async (req: Request, r
     console.log(`📄 File info: ${req.file.filename}, size: ${req.file.size}, path: ${req.file.path}`);
 
     const station = await findStationByEitherId(stationIdParam, {
-      select: { id: true, name: true }
+      select: { id: true, nanoid: true, name: true }
     });
 
     if (!station) {
@@ -334,7 +336,7 @@ router.post('/upload/:stationId', upload.single('image'), async (req: Request, r
 
     // Upload to Supabase
     console.log(`📤 Uploading processed image to Supabase for station ${station.id}`);
-    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+    const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
     console.log(`✅ Supabase upload successful: ${supabaseImageUrl}`);
 
     // Update database with Supabase image URL
@@ -403,7 +405,7 @@ router.post('/batch-download', async (req: Request, res: Response) => {
       try {
         const station = await prisma.station.findUnique({
           where: { id: parseInt(stationId) },
-          select: { id: true, name: true, favicon: true, logo: true }
+          select: { id: true, nanoid: true, name: true, favicon: true, logo: true }
         });
 
         if (!station) {
@@ -444,7 +446,7 @@ router.post('/batch-download', async (req: Request, res: Response) => {
           .toBuffer();
 
         // Upload to Supabase
-        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
         
         // Update database
         await prisma.station.update({
@@ -482,7 +484,7 @@ router.get('/info/:stationId', async (req: Request, res: Response) => {
     }
 
     const station = await findStationByEitherId(stationIdParam, {
-      select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
+      select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
     });
 
     if (!station) {

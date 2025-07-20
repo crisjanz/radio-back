@@ -17,10 +17,11 @@ const upload = (0, multer_1.default)({
     dest: 'uploads/',
     limits: { fileSize: 5 * 1024 * 1024 }
 });
-const uploadImageToSupabase = async (imageBuffer, stationId, extension = 'png') => {
-    const fileName = (0, supabase_1.getImageFileName)(stationId, extension);
-    const filePath = (0, supabase_1.getSupabaseImagePath)(stationId, extension);
-    console.log(`🔄 Uploading to Supabase - Station: ${stationId}, Path: ${filePath}, Size: ${imageBuffer.length} bytes`);
+const uploadImageToSupabase = async (imageBuffer, stationId, stationNanoid, extension = 'png') => {
+    const identifier = stationNanoid || stationId;
+    const fileName = (0, supabase_1.getImageFileName)(identifier, extension);
+    const filePath = (0, supabase_1.getSupabaseImagePath)(identifier, extension);
+    console.log(`🔄 Uploading to Supabase - Station: ${stationId} (${stationNanoid || 'no nanoid'}), Path: ${filePath}, Size: ${imageBuffer.length} bytes`);
     const { data, error } = await supabase_1.supabase.storage
         .from('streemr')
         .upload(filePath, imageBuffer, {
@@ -120,7 +121,7 @@ router.post('/download/:stationId', async (req, res) => {
         const queryUrl = req.query.url;
         const url = queryUrl || bodyUrl;
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
-            select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
+            select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {
             return res.status(404).json({ error: 'Station not found' });
@@ -193,7 +194,7 @@ router.post('/download/:stationId', async (req, res) => {
                 .toBuffer();
         }
         console.log(`📸 About to upload image for station ${station.id}, buffer size: ${processedImageBuffer.length}`);
-        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
         console.log(`🎯 Upload completed, URL: ${supabaseImageUrl}`);
         await prisma.station.update({
             where: { id: station.id },
@@ -236,7 +237,7 @@ router.post('/upload/:stationId', upload.single('image'), async (req, res) => {
         }
         console.log(`📄 File info: ${req.file.filename}, size: ${req.file.size}, path: ${req.file.path}`);
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
-            select: { id: true, name: true }
+            select: { id: true, nanoid: true, name: true }
         });
         if (!station) {
             return res.status(404).json({ error: 'Station not found' });
@@ -250,7 +251,7 @@ router.post('/upload/:stationId', upload.single('image'), async (req, res) => {
         console.log(`📋 Processed image: ${processedMetadata.width}x${processedMetadata.height}, format: ${processedMetadata.format}, hasAlpha: ${processedMetadata.hasAlpha}`);
         fs_1.default.unlinkSync(req.file.path);
         console.log(`📤 Uploading processed image to Supabase for station ${station.id}`);
-        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+        const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
         console.log(`✅ Supabase upload successful: ${supabaseImageUrl}`);
         console.log(`📝 Updating database for station ${station.id}`);
         await prisma.station.update({
@@ -309,7 +310,7 @@ router.post('/batch-download', async (req, res) => {
             try {
                 const station = await prisma.station.findUnique({
                     where: { id: parseInt(stationId) },
-                    select: { id: true, name: true, favicon: true, logo: true }
+                    select: { id: true, nanoid: true, name: true, favicon: true, logo: true }
                 });
                 if (!station) {
                     results.push({ stationId, success: false, error: 'Station not found' });
@@ -340,7 +341,7 @@ router.post('/batch-download', async (req, res) => {
                     withoutEnlargement: false
                 })
                     .toBuffer();
-                const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, 'png');
+                const supabaseImageUrl = await uploadImageToSupabase(processedImageBuffer, station.id, station.nanoid, 'png');
                 await prisma.station.update({
                     where: { id: station.id },
                     data: { local_image_url: supabaseImageUrl }
@@ -371,7 +372,7 @@ router.get('/info/:stationId', async (req, res) => {
             return res.status(400).json({ error: 'Invalid station ID format' });
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
-            select: { id: true, name: true, favicon: true, logo: true, local_image_url: true }
+            select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {
             return res.status(404).json({ error: 'Station not found' });

@@ -92,6 +92,7 @@ function populateStationEditor(station) {
     document.getElementById('edit-language').value = station.language || '';
     document.getElementById('edit-bitrate').value = station.bitrate || '';
     document.getElementById('edit-codec').value = station.codec || '';
+    document.getElementById('edit-frequency').value = station.frequency || '';
 
     // Initialize genre system using the manager
     genreManager.initializeSystem(station);
@@ -310,6 +311,7 @@ function collectStationFormData() {
         language: document.getElementById('edit-language').value.trim(),
         bitrate: parseInt(document.getElementById('edit-bitrate').value) || null,
         codec: document.getElementById('edit-codec').value.trim(),
+        frequency: document.getElementById('edit-frequency').value.trim(),
         
         // Genre data from the manager
         genre: genreSelections.genres,

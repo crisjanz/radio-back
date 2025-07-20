@@ -86,13 +86,13 @@ async function downloadStationImage(event) {
             faviconUrl: faviconUrl
         });
 
-        // Determine endpoint and payload
-        const stationId = currentEditingStation?.id && typeof currentEditingStation.id === 'number' ? currentEditingStation.id : null;
+        // Determine endpoint and payload - use NanoID if available, otherwise use numeric ID
+        const stationIdentifier = currentEditingStation?.nanoid || currentEditingStation?.id;
         let endpoint = '/images/download';
         let payload = { url: imageUrl, size: downloadSize };
 
-        if (stationId) {
-            endpoint = `/images/download/${stationId}`;
+        if (stationIdentifier) {
+            endpoint = `/images/download/${stationIdentifier}`;
             payload = { url: imageUrl, size: downloadSize }; // Send URL for existing stations
         }
 
@@ -140,7 +140,7 @@ async function downloadStationImage(event) {
             }
 
             // Show success message
-            const stationName = stationNameInput?.value?.trim() || `Station ${stationId || 'Unknown'}`;
+            const stationName = stationNameInput?.value?.trim() || `Station ${stationIdentifier || 'Unknown'}`;
             const originalInfo = result.dimensions?.original ? ` (original: ${result.dimensions.original.width}x${result.dimensions.original.height}px)` : '';
             showSuccess(`Image saved for ${stationName} (${result.dimensions?.width || downloadSize}x${result.dimensions?.height || downloadSize}px)${originalInfo}`);
         } else {
@@ -174,13 +174,14 @@ function editStationImage() {
     
     // Create a message listener for when the image editor saves
     const messageListener = (event) => {
-        if (event.data && event.data.type === 'imageUpdated' && event.data.stationId === currentEditingStation.id) {
+        if (event.data && event.data.type === 'imageUpdated' && (event.data.stationId === currentEditingStation.id || event.data.stationId === currentEditingStation.nanoid)) {
             // Reload the station image in the modal
             setTimeout(async () => {
                 console.log('🔄 Image editor saved, refreshing station data...');
                 
-                // Refresh station data from server to get updated image path
-                const response = await fetch(`/stations/${currentEditingStation.id}`);
+                // Refresh station data from server to get updated image path - use NanoID if available
+                const stationIdentifier = currentEditingStation.nanoid || currentEditingStation.id;
+                const response = await fetch(`/stations/${stationIdentifier}`);
                 if (response.ok) {
                     const updatedStation = await response.json();
                     console.log('📊 Updated station data:', updatedStation);
@@ -215,8 +216,9 @@ function editStationImage() {
     
     window.addEventListener('message', messageListener);
     
-    // Open the simple image editor with pre-loaded station
-    const editorUrl = `/admin/simple-image-editor?stationId=${currentEditingStation.id}&stationName=${encodeURIComponent(currentEditingStation.name)}`;
+    // Open the simple image editor with pre-loaded station - use NanoID if available
+    const stationIdentifier = currentEditingStation.nanoid || currentEditingStation.id;
+    const editorUrl = `/admin/simple-image-editor?stationId=${stationIdentifier}&stationName=${encodeURIComponent(currentEditingStation.name)}`;
     window.open(editorUrl, '_blank', 'width=1000,height=700');
 }
 
@@ -346,8 +348,9 @@ async function handleImageUpload(event) {
         formData.append('image', file);
 
         let endpoint = '/images/upload';
-        if (currentEditingStation?.id) {
-            endpoint = `/images/upload/${currentEditingStation.id}`;
+        const stationIdentifier = currentEditingStation?.nanoid || currentEditingStation?.id;
+        if (stationIdentifier) {
+            endpoint = `/images/upload/${stationIdentifier}`;
         }
 
         const response = await fetch(endpoint, {

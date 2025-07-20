@@ -22,11 +22,11 @@ const getSupabaseImageUrl = (fileName, options) => {
     return baseUrl;
 };
 exports.getSupabaseImageUrl = getSupabaseImageUrl;
-const getImageFileName = (stationId, extension = 'png') => {
-    return `${stationId}.${extension}`;
+const getImageFileName = (stationIdentifier, extension = 'png') => {
+    return `${stationIdentifier}.${extension}`;
 };
 exports.getImageFileName = getImageFileName;
-const getSupabaseImagePath = (stationId, extension = 'png') => {
-    return `station-images/${(0, exports.getImageFileName)(stationId, extension)}`;
+const getSupabaseImagePath = (stationIdentifier, extension = 'png') => {
+    return `station-images/${(0, exports.getImageFileName)(stationIdentifier, extension)}`;
 };
 exports.getSupabaseImagePath = getSupabaseImagePath;
