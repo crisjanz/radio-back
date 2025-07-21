@@ -21,6 +21,7 @@ const images_js_1 = __importDefault(require("./routes/images.js"));
 const image_proxy_js_1 = __importDefault(require("./routes/image-proxy.js"));
 const memory_js_1 = __importDefault(require("./routes/memory.js"));
 const feedback_js_1 = __importDefault(require("./routes/feedback.js"));
+const tracks_js_1 = __importDefault(require("./routes/tracks.js"));
 const memoryMonitor_js_1 = require("./middleware/memoryMonitor.js");
 const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
@@ -47,6 +48,7 @@ app.use('/images', images_js_1.default);
 app.use('/image-proxy', image_proxy_js_1.default);
 app.use('/memory', memory_js_1.default);
 app.use('/api/feedback', feedback_js_1.default);
+app.use('/api/tracks', tracks_js_1.default);
 app.get('/admin/stations', (req, res) => {
     res.sendFile('admin-stations.html', { root: 'public' });
 });

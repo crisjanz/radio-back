@@ -80,9 +80,13 @@ export class GenreManager {
             genreSelect.appendChild(option);
         });
         
+        // Remove any existing event listeners to prevent duplicates
+        const newGenreSelect = genreSelect.cloneNode(true);
+        genreSelect.parentNode.replaceChild(newGenreSelect, genreSelect);
+        
         // Add event listener for adding genres
         const self = this;
-        genreSelect.addEventListener('change', function() {
+        newGenreSelect.addEventListener('change', function() {
             if (this.value) {
                 self.addGenre(this.value);
                 this.value = ''; // Reset dropdown
@@ -171,9 +175,13 @@ export class GenreManager {
             typeSelect.appendChild(option);
         });
         
+        // Remove any existing event listeners to prevent duplicates
+        const newTypeSelect = typeSelect.cloneNode(true);
+        typeSelect.parentNode.replaceChild(newTypeSelect, typeSelect);
+        
         // Add event listener
         const self = this;
-        typeSelect.addEventListener('change', function() {
+        newTypeSelect.addEventListener('change', function() {
             if (this.value) {
                 self.addType(this.value);
                 this.value = '';

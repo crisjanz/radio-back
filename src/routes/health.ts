@@ -1,24 +1,24 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import fetch from 'node-fetch';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Base health endpoint
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const stationCount = await prisma.station.count();
     const stationsWithUrls = await prisma.station.count({
       where: {
         streamUrl: {
-          not: null,
-          notIn: ['', ' ']
+          not: ''
         }
       }
     });
     
-    return res.json({
+    const data = {
       success: true,
       message: 'Health check service is running',
       stats: {
@@ -33,13 +33,11 @@ router.get('/', async (req: Request, res: Response) => {
         '/health/schedule': 'Get health check schedule',
         '/health/test-stream': 'Test a specific stream URL'
       }
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error in health base endpoint:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Health service error' 
-    });
+    handleError(res, error, 'Health service error');
   }
 });
 
@@ -144,7 +142,7 @@ const pingStream = async (url: string): Promise<boolean> => {
 };
 
 // Check health of a specific station
-router.post('/check/:id', async (req: Request, res: Response) => {
+router.post('/check/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const stationId = parseInt(req.params.id);
     
@@ -153,7 +151,8 @@ router.post('/check/:id', async (req: Request, res: Response) => {
     });
     
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
     
     console.log(`🏥 Health checking station: ${station.name}`);
@@ -172,26 +171,24 @@ router.post('/check/:id', async (req: Request, res: Response) => {
     
     console.log(`${isWorking ? '✅' : '❌'} Stream ${isWorking ? 'working' : 'failed'}: ${station.name}`);
     
-    return res.json({
+    const data = {
       success: true,
       stationId,
       streamUrl: station.streamUrl,
       isWorking,
       consecutiveFailures: updatedStation.consecutiveFailures,
       lastCheck: updatedStation.lastPingCheck
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error checking station health:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Health check failed' 
-    });
+    handleError(res, error, 'Health check failed');
   }
 });
 
 // Bulk health check for stations that need checking
-router.post('/check-batch', async (req: Request, res: Response) => {
+router.post('/check-batch', async (req: Request, res: Response): Promise<void> => {
   try {
     const { maxStations = 50 } = req.body;
     
@@ -275,7 +272,7 @@ router.post('/check-batch', async (req: Request, res: Response) => {
     
     console.log(`🎉 Batch health check complete: ${checked} checked, ${working} working, ${failed} failed`);
     
-    return res.json({
+    const data = {
       success: true,
       summary: {
         totalChecked: checked,
@@ -284,19 +281,17 @@ router.post('/check-batch', async (req: Request, res: Response) => {
         availableForCheck: stationsToCheck.length
       },
       results
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error in batch health check:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Batch health check failed' 
-    });
+    handleError(res, error, 'Batch health check failed');
   }
 });
 
 // Get stations that might need admin attention
-router.get('/problematic', async (req: Request, res: Response) => {
+router.get('/problematic', async (req: Request, res: Response): Promise<void> => {
   try {
     const { limit = 50 } = req.query;
     
@@ -324,7 +319,7 @@ router.get('/problematic', async (req: Request, res: Response) => {
       take: parseInt(limit.toString())
     });
     
-    return res.json({
+    const data = {
       success: true,
       count: problematicStations.length,
       stations: problematicStations.map(station => ({
@@ -340,19 +335,17 @@ router.get('/problematic', async (req: Request, res: Response) => {
         lastPingSuccess: station.lastPingSuccess,
         adminNotes: station.adminNotes
       }))
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error fetching problematic stations:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to fetch problematic stations' 
-    });
+    handleError(res, error, 'Failed to fetch problematic stations');
   }
 });
 
 // Force recheck stations (ignores timing rules)
-router.post('/force-check', async (req: Request, res: Response) => {
+router.post('/force-check', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stationIds, maxStations = 50 } = req.body;
     
@@ -423,7 +416,7 @@ router.post('/force-check', async (req: Request, res: Response) => {
     
     console.log(`🎉 Force health check complete: ${checked} checked, ${working} working, ${failed} failed`);
     
-    return res.json({
+    const data = {
       success: true,
       summary: {
         totalChecked: checked,
@@ -432,19 +425,17 @@ router.post('/force-check', async (req: Request, res: Response) => {
         availableForCheck: stationsToCheck.length
       },
       results
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error in force health check:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Force health check failed' 
-    });
+    handleError(res, error, 'Force health check failed');
   }
 });
 
 // Get health check settings and next check times
-router.get('/schedule', async (req: Request, res: Response) => {
+router.get('/schedule', async (req: Request, res: Response): Promise<void> => {
   try {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -480,7 +471,7 @@ router.get('/schedule', async (req: Request, res: Response) => {
       })
     ]);
     
-    return res.json({
+    const data = {
       success: true,
       schedule: {
         healthyStationsInterval: '7 days',
@@ -491,45 +482,39 @@ router.get('/schedule', async (req: Request, res: Response) => {
         recentlyChecked,
         totalDueForCheck: neverChecked + needWeeklyCheck + needDailyCheck
       }
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error fetching health schedule:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to fetch schedule' 
-    });
+    handleError(res, error, 'Failed to fetch schedule');
   }
 });
 
 // Test a specific stream URL (for station editor)
-router.post('/test-stream', async (req: Request, res: Response) => {
+router.post('/test-stream', async (req: Request, res: Response): Promise<void> => {
   try {
     const { streamUrl } = req.body;
     
     if (!streamUrl) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Stream URL is required' 
-      });
+      handleValidationError(res, 'Stream URL is required');
+      return;
     }
     
     console.log(`🧪 Testing stream: ${streamUrl}`);
     const isWorking = await pingStream(streamUrl);
     
-    return res.json({
+    const data = {
       success: isWorking,
       streamUrl,
       message: isWorking ? 'Stream is accessible' : 'Stream is not accessible',
       tested: true
-    });
+    };
+    
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error testing stream:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Stream test failed' 
-    });
+    handleError(res, error, 'Stream test failed');
   }
 });
 

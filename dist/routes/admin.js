@@ -40,6 +40,7 @@ const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const station_lookup_1 = require("../utils/station-lookup");
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 router.get('/', async (req, res) => {
@@ -58,7 +59,7 @@ router.get('/', async (req, res) => {
             }),
             prisma.station.count({ where: { isActive: true } })
         ]);
-        return res.json({
+        const data = {
             success: true,
             message: 'Admin service is running',
             stats: {
@@ -75,14 +76,11 @@ router.get('/', async (req, res) => {
                 '/admin/stations/:id/toggle': 'Toggle station active status',
                 '/admin/stats': 'Get admin statistics'
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error in admin base endpoint:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Admin service error'
-        });
+        (0, express_2.handleError)(res, error, 'Admin service error');
     }
 });
 router.get('/stations/normalize', async (req, res) => {
@@ -96,14 +94,14 @@ router.get('/stations/normalize', async (req, res) => {
                 country: true
             }
         });
-        return res.json({
+        const data = {
             stations,
             pendingChanges: []
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching stations for normalization:', error);
-        return res.status(500).json({ error: 'Failed to fetch stations' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch stations');
     }
 });
 router.post('/stations/analyze', async (req, res) => {
@@ -207,25 +205,26 @@ router.post('/stations/analyze', async (req, res) => {
             }
         }
         console.log(`🔍 Sophisticated analysis complete: found ${pendingChanges.length} suggested changes`);
-        return res.json({
+        const data = {
             pendingChanges,
             analysisStats: {
                 totalStations: stations.length,
                 suggestedChanges: pendingChanges.length,
                 confidence: pendingChanges.length > 0 ? Math.round(pendingChanges.reduce((acc, c) => acc + (c.confidence || 50), 0) / pendingChanges.length) : 0
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error analyzing stations:', error);
-        return res.status(500).json({ error: 'Failed to analyze stations' });
+        (0, express_2.handleError)(res, error, 'Failed to analyze stations');
     }
 });
 router.post('/stations/apply-normalization', async (req, res) => {
     try {
         const { changes } = req.body;
         if (!Array.isArray(changes)) {
-            return res.status(400).json({ error: 'Changes must be an array' });
+            (0, express_2.handleValidationError)(res, 'Changes must be an array');
+            return;
         }
         let updated = 0;
         for (const change of changes) {
@@ -245,15 +244,16 @@ router.post('/stations/apply-normalization', async (req, res) => {
             }
         }
         console.log(`✅ Applied ${updated} normalization changes`);
-        return res.json({ updated });
+        const data = { updated };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error applying normalization:', error);
-        return res.status(500).json({ error: 'Failed to apply changes' });
+        (0, express_2.handleError)(res, error, 'Failed to apply normalization changes');
     }
 });
 router.get('/normalization-rules', async (req, res) => {
-    return res.json([]);
+    const data = [];
+    res.json(data);
 });
 router.get('/stats', async (req, res) => {
     try {
@@ -265,7 +265,7 @@ router.get('/stats', async (req, res) => {
             prisma.station.groupBy({ by: ['genre'], _count: true, where: { genre: { not: null } } }),
             prisma.station.groupBy({ by: ['type'], _count: true, where: { type: { not: null } } })
         ]);
-        return res.json({
+        const data = {
             total: totalStations,
             withGenre: stationsWithGenre,
             withType: stationsWithType,
@@ -275,11 +275,11 @@ router.get('/stats', async (req, res) => {
             topCountries: countryCounts.slice(0, 5),
             topGenres: genreCounts.slice(0, 10),
             topTypes: typeCounts.slice(0, 5)
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching admin stats:', error);
-        return res.status(500).json({ error: 'Failed to fetch statistics' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch admin statistics');
     }
 });
 router.patch('/stations/:id/toggle', async (req, res) => {
@@ -287,11 +287,13 @@ router.patch('/stations/:id/toggle', async (req, res) => {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         const { isActive, adminNotes } = req.body;
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
+            return;
         }
         const updatedStation = await prisma.station.update({
             where: { id: station.id },
@@ -303,7 +305,7 @@ router.patch('/stations/:id/toggle', async (req, res) => {
             }
         });
         console.log(`🔧 Admin ${updatedStation.isActive ? 'enabled' : 'disabled'} station: ${station.name}`);
-        return res.json({
+        const data = {
             success: true,
             station: {
                 id: updatedStation.id,
@@ -311,14 +313,11 @@ router.patch('/stations/:id/toggle', async (req, res) => {
                 isActive: updatedStation.isActive,
                 adminNotes: updatedStation.adminNotes
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error toggling station status:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to toggle station status'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to toggle station status');
     }
 });
 router.patch('/stations/:id/notes', async (req, res) => {
@@ -326,13 +325,15 @@ router.patch('/stations/:id/notes', async (req, res) => {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         const { adminNotes } = req.body;
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true }
         });
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
+            return;
         }
         const updatedStation = await prisma.station.update({
             where: { id: station.id },
@@ -341,31 +342,30 @@ router.patch('/stations/:id/notes', async (req, res) => {
                 updatedAt: new Date()
             }
         });
-        return res.json({
+        const data = {
             success: true,
             stationId: station.id,
             adminNotes: updatedStation.adminNotes
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error updating admin notes:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to update admin notes'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to update admin notes');
     }
 });
 router.patch('/stations/:id/reset-reports', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true }
         });
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
+            return;
         }
         const updatedStation = await prisma.station.update({
             where: { id: station.id },
@@ -374,29 +374,28 @@ router.patch('/stations/:id/reset-reports', async (req, res) => {
                 updatedAt: new Date()
             }
         });
-        return res.json({
+        const data = {
             success: true,
             stationId: station.id,
             userReports: updatedStation.userReports
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error resetting user reports:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to reset user reports'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to reset user reports');
     }
 });
 router.post('/stations/:id/report', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
+            return;
         }
         const updatedStation = await prisma.station.update({
             where: { id: station.id },
@@ -406,26 +405,24 @@ router.post('/stations/:id/report', async (req, res) => {
             }
         });
         console.log(`📢 User reported station not working: ${station.name} (${updatedStation.userReports} reports)`);
-        return res.json({
+        const data = {
             success: true,
             message: 'Report submitted successfully',
             stationId: station.id,
             totalReports: updatedStation.userReports
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error submitting user report:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to submit report'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to submit user report');
     }
 });
 router.post('/scrape-url', async (req, res) => {
     try {
         const { url } = req.body;
         if (!url) {
-            return res.status(400).json({ error: 'URL is required' });
+            (0, express_2.handleValidationError)(res, 'URL is required');
+            return;
         }
         const protocol = req.protocol;
         const host = req.get('host');
@@ -456,8 +453,7 @@ router.post('/scrape-url', async (req, res) => {
         }
     }
     catch (error) {
-        console.error('❌ Error scraping URL:', error);
-        res.status(500).json({ error: 'Failed to scrape website' });
+        (0, express_2.handleError)(res, error, 'Failed to scrape website');
     }
 });
 router.post('/normalize-preview', async (req, res) => {
@@ -515,7 +511,7 @@ router.post('/normalize-preview', async (req, res) => {
         if (effectiveGenre && GENRE_SYSTEM[effectiveGenre]) {
             suggestedSubgenres = GENRE_SYSTEM[effectiveGenre].subgenres.slice(0, 3);
         }
-        res.json({
+        const data = {
             genre: suggestedGenre,
             type: suggestedType,
             subgenres: suggestedSubgenres,
@@ -524,11 +520,11 @@ router.post('/normalize-preview', async (req, res) => {
                 genre: suggestedGenre ? 85 : 0,
                 type: suggestedType ? 80 : 0
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error getting normalization preview:', error);
-        res.status(500).json({ error: 'Failed to get normalization suggestions' });
+        (0, express_2.handleError)(res, error, 'Failed to get normalization suggestions');
     }
 });
 router.get('/constants/genres', async (req, res) => {
@@ -541,8 +537,7 @@ router.get('/constants/genres', async (req, res) => {
         res.json(response);
     }
     catch (error) {
-        console.error('❌ Error loading genre constants:', error);
-        res.status(500).json({ error: 'Failed to load genre constants' });
+        (0, express_2.handleError)(res, error, 'Failed to load genre constants');
     }
 });
 router.get('/constants/station-types', async (req, res) => {
@@ -555,8 +550,7 @@ router.get('/constants/station-types', async (req, res) => {
         res.json(response);
     }
     catch (error) {
-        console.error('❌ Error loading station type constants:', error);
-        res.status(500).json({ error: 'Failed to load station type constants' });
+        (0, express_2.handleError)(res, error, 'Failed to load station type constants');
     }
 });
 router.get('/constants/collection-tags', async (req, res) => {
@@ -569,8 +563,7 @@ router.get('/constants/collection-tags', async (req, res) => {
         res.json(response);
     }
     catch (error) {
-        console.error('❌ Error loading collection tag constants:', error);
-        res.status(500).json({ error: 'Failed to load collection tag constants' });
+        (0, express_2.handleError)(res, error, 'Failed to load collection tag constants');
     }
 });
 router.post('/test-metadata-url', async (req, res) => {
@@ -579,7 +572,7 @@ router.post('/test-metadata-url', async (req, res) => {
         console.log(`🧪 Testing metadata URL: ${url} (format: ${format || 'auto'})`);
         if (url === 'automatic' || format === 'auto') {
             console.log('✅ Rogers Auto configuration detected');
-            return res.json({
+            const data = {
                 success: true,
                 metadata: {
                     title: 'Rogers Auto Configuration',
@@ -587,13 +580,17 @@ router.post('/test-metadata-url', async (req, res) => {
                     song: 'Rogers API integration enabled'
                 },
                 message: 'Rogers Auto configuration is working. Metadata will be provided automatically during playback.'
-            });
+            };
+            res.json(data);
+            return;
         }
         if (!url) {
-            return res.status(400).json({
+            const data = {
                 success: false,
                 error: 'URL is required'
-            });
+            };
+            res.status(400).json(data);
+            return;
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -624,7 +621,7 @@ router.post('/test-metadata-url', async (req, res) => {
             data = JSON.parse(responseText);
         }
         else if (format === 'xml' || contentType.includes('xml')) {
-            return res.json({
+            const xmlData = {
                 success: true,
                 metadata: {
                     title: 'XML Response',
@@ -632,14 +629,16 @@ router.post('/test-metadata-url', async (req, res) => {
                     song: 'XML format detected'
                 },
                 rawResponse: responseText.substring(0, 500) + '...'
-            });
+            };
+            res.json(xmlData);
+            return;
         }
         else {
             try {
                 data = JSON.parse(responseText);
             }
             catch {
-                return res.json({
+                const textData = {
                     success: true,
                     metadata: {
                         title: 'Text Response',
@@ -647,7 +646,9 @@ router.post('/test-metadata-url', async (req, res) => {
                         song: 'Text format detected'
                     },
                     rawResponse: responseText.substring(0, 500) + '...'
-                });
+                };
+                res.json(textData);
+                return;
             }
         }
         let metadata = {};
@@ -681,19 +682,16 @@ router.post('/test-metadata-url', async (req, res) => {
                 song: 'Metadata detected but format unknown'
             };
         }
-        res.json({
+        const resultData = {
             success: true,
             metadata,
             format: format || 'auto-detected',
             contentType
-        });
+        };
+        res.json(resultData);
     }
     catch (error) {
-        console.error('❌ Error testing metadata URL:', error);
-        res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to test metadata URL');
     }
 });
 exports.default = router;

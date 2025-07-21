@@ -1,6 +1,31 @@
 // UI Rendering Module
 // Handles DOM manipulation, station rows, forms, and visual elements
 
+// NanoID Helper Functions
+function generateNanoId() {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    }
+    return result;
+}
+
+function isValidNanoId(id) {
+    return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+}
+
+function getStationIdentifier(station) {
+    return station.nanoid || station.id?.toString();
+}
+
+function findStationById(stations, stationId) {
+    return stations.find(s => {
+        const identifier = getStationIdentifier(s);
+        return identifier === stationId || identifier === stationId.toString();
+    });
+}
+
 function renderStations() {
     const container = document.getElementById('stations-list');
     const loading = document.getElementById('loading-state');
@@ -44,7 +69,7 @@ function renderStations() {
 function createStationRow(station) {
     const hasImage = station.favicon || station.logo || station.local_image_url;
     const imageUrl = getFaviconUrl(station, { cacheBust: true });
-    const isSelected = selectedStations.has(station.id);
+    const isSelected = selectedStations.has(getStationIdentifier(station));
 
     return `
         <div class="station-row grid grid-cols-1 md:grid-cols-12 gap-4 px-6 py-4 items-center">
@@ -53,7 +78,7 @@ function createStationRow(station) {
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-3">
                         <input type="checkbox" ${isSelected ? 'checked' : ''} 
-                               onchange="toggleStationSelection(${station.id})"
+                               onchange="toggleStationSelection('${getStationIdentifier(station)}')"
                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                         <div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0">
                             ${hasImage ? `<img src="${imageUrl}" alt="${station.name}" class="w-full h-full object-contain">` : 
@@ -66,12 +91,12 @@ function createStationRow(station) {
                     </div>
                     <div class="flex items-center space-x-2">
                         <span class="health-indicator health-gray" title="Health status unknown"></span>
-                        <select onchange="updateStationStatus(${station.id}, this.value)" 
+                        <select onchange="updateStationStatus('${getStationIdentifier(station)}', this.value)" 
                                 class="px-2 py-1 border border-gray-300 text-sm rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="true" ${station.isActive !== false ? 'selected' : ''}>Active</option>
                             <option value="false" ${station.isActive === false ? 'selected' : ''}>Inactive</option>
                         </select>
-                        <button onclick="editStation(${station.id})" 
+                        <button onclick="editStation('${getStationIdentifier(station)}')" 
                                 class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
                             Edit
                         </button>
@@ -89,7 +114,7 @@ function createStationRow(station) {
             <div class="hidden md:contents">
                 <div class="col-span-1">
                     <input type="checkbox" ${isSelected ? 'checked' : ''} 
-                           onchange="toggleStationSelection(${station.id})"
+                           onchange="toggleStationSelection('${getStationIdentifier(station)}')"
                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                 </div>
                 <div class="col-span-1">
@@ -117,12 +142,12 @@ function createStationRow(station) {
                 </div>
                 <div class="col-span-2">
                     <div class="flex space-x-2">
-                        <select onchange="updateStationStatus(${station.id}, this.value)" 
+                        <select onchange="updateStationStatus('${getStationIdentifier(station)}', this.value)" 
                                 class="px-2 py-1 border border-gray-300 text-sm rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="true" ${station.isActive !== false ? 'selected' : ''}>Active</option>
                             <option value="false" ${station.isActive === false ? 'selected' : ''}>Inactive</option>
                         </select>
-                        <button onclick="editStation(${station.id})" 
+                        <button onclick="editStation('${getStationIdentifier(station)}')" 
                                 class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors">
                             <i class="fas fa-edit mr-1"></i>Edit
                         </button>

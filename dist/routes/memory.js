@@ -2,8 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const memoryMonitor_js_1 = require("../middleware/memoryMonitor.js");
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
-router.get('/', async (req, res) => {
+router.get('/', (async (req, res) => {
     try {
         const usage = memoryMonitor_js_1.memoryMonitor.getMemoryUsage();
         const processUptime = Math.floor(process.uptime());
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
             status = 'elevated';
             statusColor = 'yellow';
         }
-        return res.json({
+        const data = {
             success: true,
             memory: {
                 heapUsed: usage.heapUsed,
@@ -49,16 +50,13 @@ router.get('/', async (req, res) => {
                 warning: '350-400 MB',
                 critical: '> 400 MB'
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching memory stats:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to fetch memory stats'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to fetch memory stats');
     }
-});
+}));
 function formatUptime(seconds) {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);

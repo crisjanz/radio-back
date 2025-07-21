@@ -5,9 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
-    return res.json({
+    const data = {
         success: true,
         message: 'Web scraping service is running',
         description: 'Extract business information from websites and Google Maps URLs',
@@ -28,7 +29,8 @@ router.get('/', async (req, res) => {
                 url: 'https://example.com or Google Maps URL'
             }
         }
-    });
+    };
+    res.json(data);
 });
 const decodeHtmlEntities = (text) => {
     if (!text)
@@ -57,7 +59,8 @@ router.post('/business', async (req, res) => {
     const { url } = req.body;
     console.log(`🕷️ Scraping business info from: ${url}`);
     if (!url) {
-        return res.status(400).json({ success: false, error: 'URL is required' });
+        res.status(400).json({ success: false, error: 'URL is required' });
+        return;
     }
     try {
         let finalUrl = url;
@@ -588,34 +591,35 @@ router.post('/business', async (req, res) => {
         if (!hasUsefulData) {
             if (finalUrl.includes('google.com/maps') || finalUrl.includes('maps.google.com')) {
                 console.log('⚠️ Google Maps scraping failed - likely due to JavaScript rendering');
-                return res.json({
+                const data = {
                     success: false,
                     error: 'Google Maps pages require JavaScript to load content. Try using the business\'s official website instead, or copy information manually.',
                     suggestion: 'For Google Maps: 1) Right-click on the place → "What\'s here?" to get coordinates, 2) Check if the business has a website link, 3) Use the business name to search for their official website.'
-                });
+                };
+                res.json(data);
+                return;
             }
             else {
                 console.log('⚠️ Website scraping found no useful business information');
-                return res.json({
+                const data = {
                     success: false,
                     error: 'No useful business information found on this page. The page may not contain structured data or may require JavaScript to load content.',
                     suggestion: 'Try: 1) A different page on the same website (like an "About" or "Contact" page), 2) The business\'s Google Maps listing, 3) Copy information manually from the website.'
-                });
+                };
+                res.json(data);
+                return;
             }
         }
         console.log(`✅ Scraping successful from ${source}:`, businessInfo);
-        return res.json({
+        const data = {
             success: true,
             data: businessInfo,
             source: source
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Scraping failed:', error);
-        return res.json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to scrape business information'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to scrape business information');
     }
 });
 exports.default = router;

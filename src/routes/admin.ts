@@ -3,12 +3,13 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import fetch from 'node-fetch';
 import { findStationByEitherId, parseStationIdParam } from '../utils/station-lookup';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Base admin endpoint
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const [totalStations, stationsNeedingNormalization, activeStations] = await Promise.all([
       prisma.station.count(),
@@ -25,7 +26,7 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.station.count({ where: { isActive: true } })
     ]);
     
-    return res.json({
+    const data = {
       success: true,
       message: 'Admin service is running',
       stats: {
@@ -42,18 +43,16 @@ router.get('/', async (req: Request, res: Response) => {
         '/admin/stations/:id/toggle': 'Toggle station active status',
         '/admin/stats': 'Get admin statistics'
       }
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error in admin base endpoint:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Admin service error' 
-    });
+    handleError(res, error, 'Admin service error');
   }
 });
 
 // Get stations for normalization
-router.get('/stations/normalize', async (req: Request, res: Response) => {
+router.get('/stations/normalize', async (req: Request, res: Response): Promise<void> => {
   try {
     const stations = await prisma.station.findMany({
       select: {
@@ -66,18 +65,19 @@ router.get('/stations/normalize', async (req: Request, res: Response) => {
     });
     
     // For now, return empty pending changes - the frontend will analyze
-    return res.json({
+    const data = {
       stations,
       pendingChanges: []
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error fetching stations for normalization:', error);
-    return res.status(500).json({ error: 'Failed to fetch stations' });
+    handleError(res, error, 'Failed to fetch stations');
   }
 });
 
 // Analyze stations for normalization opportunities
-router.post('/stations/analyze', async (req: Request, res: Response) => {
+router.post('/stations/analyze', async (req: Request, res: Response): Promise<void> => {
   try {
     const stations = await prisma.station.findMany({
       select: {
@@ -210,27 +210,28 @@ router.post('/stations/analyze', async (req: Request, res: Response) => {
     }
     
     console.log(`🔍 Sophisticated analysis complete: found ${pendingChanges.length} suggested changes`);
-    return res.json({ 
+    const data = { 
       pendingChanges,
       analysisStats: {
         totalStations: stations.length,
         suggestedChanges: pendingChanges.length,
         confidence: pendingChanges.length > 0 ? Math.round(pendingChanges.reduce((acc, c) => acc + (c.confidence || 50), 0) / pendingChanges.length) : 0
       }
-    });
+    };
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error analyzing stations:', error);
-    return res.status(500).json({ error: 'Failed to analyze stations' });
+    handleError(res, error, 'Failed to analyze stations');
   }
 });
 
 // Apply normalization changes
-router.post('/stations/apply-normalization', async (req: Request, res: Response) => {
+router.post('/stations/apply-normalization', async (req: Request, res: Response): Promise<void> => {
   try {
     const { changes } = req.body;
     
     if (!Array.isArray(changes)) {
-      return res.status(400).json({ error: 'Changes must be an array' });
+      handleValidationError(res, 'Changes must be an array');
+      return;
     }
     
     let updated = 0;
@@ -252,21 +253,22 @@ router.post('/stations/apply-normalization', async (req: Request, res: Response)
     }
     
     console.log(`✅ Applied ${updated} normalization changes`);
-    return res.json({ updated });
+    const data = { updated };
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error applying normalization:', error);
-    return res.status(500).json({ error: 'Failed to apply changes' });
+    handleError(res, error, 'Failed to apply normalization changes');
   }
 });
 
 // Get normalization rules (placeholder for future functionality)
-router.get('/normalization-rules', async (req: Request, res: Response) => {
+router.get('/normalization-rules', async (req: Request, res: Response): Promise<void> => {
   // For now, return empty rules - could be stored in database later
-  return res.json([]);
+  const data = [];
+  res.json(data);
 });
 
 // Get admin statistics
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const [
       totalStations,
@@ -284,7 +286,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       prisma.station.groupBy({ by: ['type'], _count: true, where: { type: { not: null } } })
     ]);
 
-    return res.json({
+    const data = {
       total: totalStations,
       withGenre: stationsWithGenre,
       withType: stationsWithType,
@@ -294,27 +296,29 @@ router.get('/stats', async (req: Request, res: Response) => {
       topCountries: countryCounts.slice(0, 5),
       topGenres: genreCounts.slice(0, 10),
       topTypes: typeCounts.slice(0, 5)
-    });
+    };
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error fetching admin stats:', error);
-    return res.status(500).json({ error: 'Failed to fetch statistics' });
+    handleError(res, error, 'Failed to fetch admin statistics');
   }
 });
 
 // Enable/disable a station (supports both numeric and nanoid)
-router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: Response) => {
+router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     const { isActive, adminNotes } = req.body;
     
     if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
+      return;
     }
     
     const station = await findStationByEitherId(stationIdParam);
     
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
     
     const updatedStation = await prisma.station.update({
@@ -329,7 +333,7 @@ router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: R
     
     console.log(`🔧 Admin ${updatedStation.isActive ? 'enabled' : 'disabled'} station: ${station.name}`);
     
-    return res.json({
+    const data = {
       success: true,
       station: {
         id: updatedStation.id,
@@ -337,25 +341,23 @@ router.patch('/stations/:id/toggle', async (req: Request<{ id: string }>, res: R
         isActive: updatedStation.isActive,
         adminNotes: updatedStation.adminNotes
       }
-    });
+    };
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error toggling station status:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to toggle station status' 
-    });
+    handleError(res, error, 'Failed to toggle station status');
   }
 });
 
 // Update station admin notes (supports both numeric and nanoid)
-router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Response) => {
+router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     const { adminNotes } = req.body;
     
     if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
+      return;
     }
     
     const station = await findStationByEitherId(stationIdParam, {
@@ -363,7 +365,8 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
     });
     
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
     
     const updatedStation = await prisma.station.update({
@@ -374,28 +377,26 @@ router.patch('/stations/:id/notes', async (req: Request<{ id: string }>, res: Re
       }
     });
     
-    return res.json({
+    const data = {
       success: true,
       stationId: station.id,
       adminNotes: updatedStation.adminNotes
-    });
+    };
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error updating admin notes:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to update admin notes' 
-    });
+    handleError(res, error, 'Failed to update admin notes');
   }
 });
 
 // Reset user reports for a station (supports both numeric and nanoid)
-router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>, res: Response) => {
+router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
+      return;
     }
     
     const station = await findStationByEitherId(stationIdParam, {
@@ -403,7 +404,8 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
     });
     
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
     
     const updatedStation = await prisma.station.update({
@@ -414,34 +416,33 @@ router.patch('/stations/:id/reset-reports', async (req: Request<{ id: string }>,
       }
     });
     
-    return res.json({
+    const data = {
       success: true,
       stationId: station.id,
       userReports: updatedStation.userReports
-    });
+    };
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error resetting user reports:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to reset user reports' 
-    });
+    handleError(res, error, 'Failed to reset user reports');
   }
 });
 
 // Report a station as not working (user endpoint) - supports both numeric and nanoid
-router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Response) => {
+router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
+      return;
     }
     
     const station = await findStationByEitherId(stationIdParam);
     
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
     
     const updatedStation = await prisma.station.update({
@@ -454,29 +455,27 @@ router.post('/stations/:id/report', async (req: Request<{ id: string }>, res: Re
     
     console.log(`📢 User reported station not working: ${station.name} (${updatedStation.userReports} reports)`);
     
-    return res.json({
+    const data = {
       success: true,
       message: 'Report submitted successfully',
       stationId: station.id,
       totalReports: updatedStation.userReports
-    });
+    };
+    res.json(data);
     
   } catch (error) {
-    console.error('❌ Error submitting user report:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to submit report' 
-    });
+    handleError(res, error, 'Failed to submit user report');
   }
 });
 
 // Scraper endpoint for unified editor
-router.post('/scrape-url', async (req: Request, res: Response) => {
+router.post('/scrape-url', async (req: Request, res: Response): Promise<void> => {
   try {
     const { url } = req.body;
     
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      handleValidationError(res, 'URL is required');
+      return;
     }
 
     // Use the existing scraping endpoint - construct URL from current request
@@ -510,13 +509,12 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       throw new Error('Failed to scrape website');
     }
   } catch (error) {
-    console.error('❌ Error scraping URL:', error);
-    res.status(500).json({ error: 'Failed to scrape website' });
+    handleError(res, error, 'Failed to scrape website');
   }
 });
 
 // Normalization preview endpoint
-router.post('/normalize-preview', async (req: Request, res: Response) => {
+router.post('/normalize-preview', async (req: Request, res: Response): Promise<void> => {
   try {
     const { genre, type, name, description } = req.body;
     
@@ -589,7 +587,7 @@ router.post('/normalize-preview', async (req: Request, res: Response) => {
       suggestedSubgenres = GENRE_SYSTEM[effectiveGenre].subgenres.slice(0, 3); // First 3 subgenres
     }
     
-    res.json({
+    const data = {
       genre: suggestedGenre,
       type: suggestedType,
       subgenres: suggestedSubgenres,
@@ -598,15 +596,15 @@ router.post('/normalize-preview', async (req: Request, res: Response) => {
         genre: suggestedGenre ? 85 : 0,
         type: suggestedType ? 80 : 0
       }
-    });
+    };
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error getting normalization preview:', error);
-    res.status(500).json({ error: 'Failed to get normalization suggestions' });
+    handleError(res, error, 'Failed to get normalization suggestions');
   }
 });
 
 // Constants endpoints for station editor
-router.get('/constants/genres', async (req: Request, res: Response) => {
+router.get('/constants/genres', async (req: Request, res: Response): Promise<void> => {
   try {
     const { GENRE_SYSTEM } = await import('../constants/genres');
     
@@ -617,12 +615,11 @@ router.get('/constants/genres', async (req: Request, res: Response) => {
     
     res.json(response);
   } catch (error) {
-    console.error('❌ Error loading genre constants:', error);
-    res.status(500).json({ error: 'Failed to load genre constants' });
+    handleError(res, error, 'Failed to load genre constants');
   }
 });
 
-router.get('/constants/station-types', async (req: Request, res: Response) => {
+router.get('/constants/station-types', async (req: Request, res: Response): Promise<void> => {
   try {
     const { STATION_TYPES } = await import('../constants/stationTypes');
     
@@ -633,12 +630,11 @@ router.get('/constants/station-types', async (req: Request, res: Response) => {
     
     res.json(response);
   } catch (error) {
-    console.error('❌ Error loading station type constants:', error);
-    res.status(500).json({ error: 'Failed to load station type constants' });
+    handleError(res, error, 'Failed to load station type constants');
   }
 });
 
-router.get('/constants/collection-tags', async (req: Request, res: Response) => {
+router.get('/constants/collection-tags', async (req: Request, res: Response): Promise<void> => {
   try {
     const { COLLECTION_TAGS } = await import('../constants/collectionTags');
     
@@ -649,13 +645,12 @@ router.get('/constants/collection-tags', async (req: Request, res: Response) => 
     
     res.json(response);
   } catch (error) {
-    console.error('❌ Error loading collection tag constants:', error);
-    res.status(500).json({ error: 'Failed to load collection tag constants' });
+    handleError(res, error, 'Failed to load collection tag constants');
   }
 });
 
 // Test metadata URL endpoint
-router.post('/test-metadata-url', async (req: Request, res: Response) => {
+router.post('/test-metadata-url', async (req: Request, res: Response): Promise<void> => {
   try {
     const { url, format } = req.body;
     
@@ -664,7 +659,7 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
     // Handle Rogers Auto configuration
     if (url === 'automatic' || format === 'auto') {
       console.log('✅ Rogers Auto configuration detected');
-      return res.json({
+      const data = {
         success: true,
         metadata: {
           title: 'Rogers Auto Configuration',
@@ -672,14 +667,18 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
           song: 'Rogers API integration enabled'
         },
         message: 'Rogers Auto configuration is working. Metadata will be provided automatically during playback.'
-      });
+      };
+      res.json(data);
+      return;
     }
     
     if (!url) {
-      return res.status(400).json({ 
+      const data = { 
         success: false, 
         error: 'URL is required' 
-      });
+      };
+      res.status(400).json(data);
+      return;
     }
     
     // Test the URL directly
@@ -718,7 +717,7 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
       data = JSON.parse(responseText);
     } else if (format === 'xml' || contentType.includes('xml')) {
       // For XML, just return a success message
-      return res.json({
+      const xmlData = {
         success: true,
         metadata: {
           title: 'XML Response',
@@ -726,13 +725,15 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
           song: 'XML format detected'
         },
         rawResponse: responseText.substring(0, 500) + '...'
-      });
+      };
+      res.json(xmlData);
+      return;
     } else {
       // Try JSON first, then treat as text
       try {
         data = JSON.parse(responseText);
       } catch {
-        return res.json({
+        const textData = {
           success: true,
           metadata: {
             title: 'Text Response',
@@ -740,7 +741,9 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
             song: 'Text format detected'
           },
           rawResponse: responseText.substring(0, 500) + '...'
-        });
+        };
+        res.json(textData);
+        return;
       }
     }
     
@@ -782,19 +785,16 @@ router.post('/test-metadata-url', async (req: Request, res: Response) => {
       };
     }
     
-    res.json({
+    const resultData = {
       success: true,
       metadata,
       format: format || 'auto-detected',
       contentType
-    });
+    };
+    res.json(resultData);
     
   } catch (error) {
-    console.error('❌ Error testing metadata URL:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    handleError(res, error, 'Failed to test metadata URL');
   }
 });
 

@@ -1,6 +1,31 @@
 // Station Editor Module - ES6 Version
 // Handles station editing modal, form validation, saving, and data management
 
+// NanoID Helper Functions
+function generateNanoId() {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    }
+    return result;
+}
+
+function isValidNanoId(id) {
+    return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+}
+
+function getStationIdentifier(station) {
+    return station.nanoid || station.id?.toString();
+}
+
+function findStationById(stations, stationId) {
+    return stations.find(s => {
+        const identifier = getStationIdentifier(s);
+        return identifier === stationId || identifier === stationId.toString();
+    });
+}
+
 import { GenreManager } from './modules/station-editor-genres.js';
 import { ScrapingManager } from './modules/station-editor-scraping.js';
 import { ValidationManager } from './modules/station-editor-validation.js';
@@ -41,7 +66,7 @@ window.StationEditorCore = {
 // Core station editor functions
 async function editStation(stationId) {
     console.log('Opening station editor for station:', stationId);
-    const station = stations.find(s => s.id === stationId);
+    const station = findStationById(stations, stationId);
     if (!station) {
         alert('Station not found');
         return;
@@ -72,10 +97,11 @@ async function editStation(stationId) {
 function populateStationEditor(station) {
     // Update header
     document.getElementById('editor-station-name').textContent = station.name || 'Unnamed Station';
-    document.getElementById('editor-station-id').textContent = station.id;
+    document.getElementById('editor-station-id').textContent = getStationIdentifier(station);
 
     // Show/hide delete buttons based on whether this is a new station
-    const isNewStation = station.id === 'NEW' || !station.id;
+    const stationIdentifier = getStationIdentifier(station);
+    const isNewStation = stationIdentifier === 'NEW' || !stationIdentifier;
     const deleteButtons = document.querySelectorAll('#delete-station-btn, #delete-station-btn-footer');
     deleteButtons.forEach(btn => {
         if (btn) {
@@ -239,7 +265,7 @@ async function saveStation() {
             successMessage = 'Station created successfully!';
         } else {
             // Update existing station
-            response = await fetch(`/stations/${currentEditingStation.id}`, {
+            response = await fetch(`/stations/${getStationIdentifier(currentEditingStation)}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -259,7 +285,7 @@ async function saveStation() {
                     stations.push(station);
                 } else {
                     // Update existing station
-                    const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
+                    const stationIndex = stations.findIndex(s => getStationIdentifier(s) === getStationIdentifier(currentEditingStation));
                     if (stationIndex !== -1) {
                         stations[stationIndex] = station;
                     }
@@ -273,7 +299,7 @@ async function saveStation() {
                     filteredStations.push(station);
                 } else {
                     // Update existing station
-                    const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
+                    const filteredIndex = filteredStations.findIndex(s => getStationIdentifier(s) === getStationIdentifier(currentEditingStation));
                     if (filteredIndex !== -1) {
                         filteredStations[filteredIndex] = station;
                     }
@@ -351,7 +377,7 @@ function collectStationFormData() {
 
 // Delete station function
 async function deleteStation() {
-    if (!currentEditingStation || !currentEditingStation.id) {
+    if (!currentEditingStation || !getStationIdentifier(currentEditingStation)) {
         showError('No station selected for deletion');
         return;
     }
@@ -365,9 +391,9 @@ async function deleteStation() {
     }
 
     try {
-        console.log('Deleting station:', currentEditingStation.id);
+        console.log('Deleting station:', getStationIdentifier(currentEditingStation));
         
-        const response = await fetch(`/stations/${currentEditingStation.id}`, {
+        const response = await fetch(`/stations/${getStationIdentifier(currentEditingStation)}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
@@ -377,14 +403,14 @@ async function deleteStation() {
         if (response.ok) {
             // Remove the station from local data arrays
             if (typeof stations !== 'undefined' && Array.isArray(stations)) {
-                const stationIndex = stations.findIndex(s => s.id === currentEditingStation.id);
+                const stationIndex = stations.findIndex(s => getStationIdentifier(s) === getStationIdentifier(currentEditingStation));
                 if (stationIndex !== -1) {
                     stations.splice(stationIndex, 1);
                 }
             }
 
             if (typeof filteredStations !== 'undefined' && Array.isArray(filteredStations)) {
-                const filteredIndex = filteredStations.findIndex(s => s.id === currentEditingStation.id);
+                const filteredIndex = filteredStations.findIndex(s => getStationIdentifier(s) === getStationIdentifier(currentEditingStation));
                 if (filteredIndex !== -1) {
                     filteredStations.splice(filteredIndex, 1);
                 }

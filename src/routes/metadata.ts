@@ -3,16 +3,18 @@ import { detectStreamMetadata } from '../services/metadata';
 import { parseTrackTitle, decodeHtmlEntities } from '../services/metadata/utils';
 import { PrismaClient } from '@prisma/client';
 import { findStationByEitherId, parseStationIdParam } from '../utils/station-lookup';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Frontend metadata endpoint - GET /metadata?stream=...
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   const { stream } = req.query;
   
   if (!stream || typeof stream !== 'string') {
-    return res.status(400).json({ error: 'Stream URL required' });
+    handleValidationError(res, 'Stream URL required');
+    return;
   }
   
   try {
@@ -25,44 +27,47 @@ router.get('/', async (req: Request, res: Response) => {
         // Parse artist and title if available
         const parsed = parseTrackTitle(result.nowPlaying);
         
-        return res.json({
+        const data = {
           success: true,
           song: result.nowPlaying,
           title: parsed.title || result.nowPlaying,
           artist: parsed.artist,
           message: result.message
-        });
+        };
+        res.json(data);
+        return;
       } else {
         // Stream supports metadata but no current track
-        return res.json({
+        const data = {
           success: true,
           hasMetadataSupport: true,
           message: 'Stream supports metadata but no current track'
-        });
+        };
+        res.json(data);
+        return;
       }
     } else {
       // No metadata support
-      return res.json({
+      const data = {
         success: false,
         message: result.error || 'No metadata support detected'
-      });
+      };
+      res.json(data);
+      return;
     }
     
   } catch (error) {
-    console.error('Frontend metadata error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch metadata'
-    });
+    handleError(res, error, 'Failed to fetch metadata');
   }
 });
 
 // Station ID-based metadata endpoint - GET /metadata/:stationId
-router.get('/:stationId', async (req: Request, res: Response) => {
+router.get('/:stationId', async (req: Request, res: Response): Promise<void> => {
   const { stationId } = req.params;
   
   if (!stationId) {
-    return res.status(400).json({ error: 'Station ID required' });
+    handleValidationError(res, 'Station ID required');
+    return;
   }
   
   try {
@@ -74,10 +79,12 @@ router.get('/:stationId', async (req: Request, res: Response) => {
     });
     
     if (!station || !station.streamUrl) {
-      return res.json({
+      const data = {
         success: false,
         message: `Station ${stationId} not found or missing stream URL`
-      });
+      };
+      res.json(data);
+      return;
     }
     
     console.log(`🔍 Found station "${station.name}" (${station.nanoid || station.id}) with stream URL: ${station.streamUrl}`);
@@ -124,7 +131,7 @@ router.get('/:stationId', async (req: Request, res: Response) => {
             // Parse artist and title if available
             const parsed = parseTrackTitle(songInfo);
             
-            return res.json({
+            const data = {
               success: true,
               song: songInfo,
               title: decodeHtmlEntities(localData.title || '') || parsed.title || songInfo,
@@ -135,7 +142,9 @@ router.get('/:stationId', async (req: Request, res: Response) => {
               ...(localData.artwork && { artwork: localData.artwork }),
               ...(localData.album && { album: localData.album }),
               ...(localData.rogersData && { rogersData: localData.rogersData })
-            });
+            };
+            res.json(data);
+            return;
           } else {
             console.log(`⚠️ Local server returned no metadata, falling back to Icecast`);
           }
@@ -160,47 +169,50 @@ router.get('/:stationId', async (req: Request, res: Response) => {
         // Parse artist and title if available
         const parsed = parseTrackTitle(result.nowPlaying);
         
-        return res.json({
+        const data = {
           success: true,
           song: result.nowPlaying,
           title: parsed.title || result.nowPlaying,
           artist: parsed.artist,
           source: 'icecast',
           message: result.message
-        });
+        };
+        res.json(data);
+        return;
       } else {
         // Stream supports metadata but no current track
-        return res.json({
+        const data = {
           success: true,
           hasMetadataSupport: true,
           source: 'icecast',
           message: 'Stream supports metadata but no current track'
-        });
+        };
+        res.json(data);
+        return;
       }
     } else {
       // No metadata support
-      return res.json({
+      const data = {
         success: false,
         source: 'icecast',
         message: result.error || 'No metadata support detected'
-      });
+      };
+      res.json(data);
+      return;
     }
     
   } catch (error) {
-    console.error(`Metadata error for station ${stationId}:`, error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch metadata'
-    });
+    handleError(res, error, `Failed to fetch metadata for station ${stationId}`);
   }
 });
 
 // Admin metadata testing endpoint - POST /metadata/test
-router.post('/test', async (req: Request, res: Response) => {
+router.post('/test', async (req: Request, res: Response): Promise<void> => {
   const { streamUrl } = req.body;
   
   if (!streamUrl) {
-    return res.status(400).json({ error: 'Stream URL is required' });
+    handleValidationError(res, 'Stream URL is required');
+    return;
   }
   
   try {
@@ -208,14 +220,10 @@ router.post('/test', async (req: Request, res: Response) => {
     
     const result = await detectStreamMetadata(streamUrl);
     
-    return res.json(result);
+    res.json(result);
     
   } catch (error) {
-    console.error('Admin metadata test error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to test metadata'
-    });
+    handleError(res, error, 'Failed to test metadata');
   }
 });
 

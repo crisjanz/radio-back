@@ -1,25 +1,29 @@
 import express from 'express';
 import { Request, Response } from 'express';
+import { handleValidationError } from '../types/express';
 
 const router = express.Router();
 
 // Stream proxy endpoint to handle HTTP streams over HTTPS
-router.get('/stream', async (req: Request, res: Response) => {
+router.get('/stream', async (req: Request, res: Response): Promise<void> => {
   try {
     const streamUrl = req.query.url as string;
     
     if (!streamUrl) {
-      return res.status(400).json({ error: 'Stream URL is required' });
+      handleValidationError(res, 'Stream URL is required');
+      return;
     }
 
     // Validate URL format
     try {
       const url = new URL(streamUrl);
       if (!['http:', 'https:'].includes(url.protocol)) {
-        return res.status(400).json({ error: 'Invalid stream URL protocol' });
+        handleValidationError(res, 'Invalid stream URL protocol');
+        return;
       }
     } catch {
-      return res.status(400).json({ error: 'Invalid stream URL format' });
+      handleValidationError(res, 'Invalid stream URL format');
+      return;
     }
 
     console.log('📡 Proxying stream:', streamUrl);
@@ -36,9 +40,10 @@ router.get('/stream', async (req: Request, res: Response) => {
 
     if (!response.ok) {
       console.error('Stream fetch failed:', response.status, response.statusText);
-      return res.status(response.status).json({ 
+      res.status(response.status).json({ 
         error: `Stream not available: ${response.statusText}` 
       });
+      return;
     }
 
     // Set appropriate headers for audio streaming
@@ -96,6 +101,7 @@ router.get('/stream', async (req: Request, res: Response) => {
       pump();
     } else {
       res.status(500).json({ error: 'No stream data available' });
+      return;
     }
 
   } catch (error) {

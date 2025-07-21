@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { findStationByEitherId, parseStationIdParam, getPreferredStationId } from '../utils/station-lookup';
 import { generateStationId } from '../utils/nanoid';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -38,7 +39,7 @@ async function getNextAvailableStationId(): Promise<number> {
 }
 
 // Get all stations with optional pagination
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 100;
@@ -60,13 +61,14 @@ router.get('/', async (req: Request, res: Response) => {
 
     // If pagination is requested, return paginated format
     if (req.query.page || req.query.limit) {
-      res.json({
+      const data = {
         stations,
         total,
         page,
         limit,
         totalPages: Math.ceil(total / limit)
-      });
+      };
+      res.json(data);
       return;
     } else {
       // Return all stations for backward compatibility (filtered by active status)
@@ -75,19 +77,17 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
   } catch (error) {
-    console.error('❌ Error fetching stations:', error);
-    res.status(500).json({ error: 'Failed to fetch stations' });
-    return;
+    handleError(res, error, 'Failed to fetch stations');
   }
 });
 
 // Search stations - MUST come before /stations/:id route
-router.get('/search', async (req: Request, res: Response) => {
+router.get('/search', async (req: Request, res: Response): Promise<void> => {
   try {
     const query = req.query.q as string;
     
     if (!query || query.trim().length < 2) {
-      res.status(400).json({ error: 'Search query must be at least 2 characters long' });
+      handleValidationError(res, 'Search query must be at least 2 characters long');
       return;
     }
 
@@ -118,13 +118,12 @@ router.get('/search', async (req: Request, res: Response) => {
     
     res.json(stations);
   } catch (error) {
-    console.error('❌ Error searching stations:', error);
-    res.status(500).json({ error: 'Failed to search stations' });
+    handleError(res, error, 'Failed to search stations');
   }
 });
 
 // Get database statistics
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const [total, withImages, recentImports] = await Promise.all([
       prisma.station.count(),
@@ -145,20 +144,21 @@ router.get('/stats', async (req: Request, res: Response) => {
       })
     ]);
 
-    res.json({
+    const data = {
       total,
       active: total, // For now, assume all are active
       withImages,
       recentImports
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('Error getting database stats:', error);
-    res.status(500).json({ error: 'Failed to get database stats' });
+    handleError(res, error, 'Failed to get database stats');
   }
 });
 
 // Get countries with station counts
-router.get('/countries', async (req: Request, res: Response) => {
+router.get('/countries', async (req: Request, res: Response): Promise<void> => {
   try {
     const countries = await prisma.station.groupBy({
       by: ['country'],
@@ -177,13 +177,12 @@ router.get('/countries', async (req: Request, res: Response) => {
 
     res.json(formattedCountries);
   } catch (error) {
-    console.error('❌ Error fetching countries:', error);
-    res.status(500).json({ error: 'Failed to fetch countries' });
+    handleError(res, error, 'Failed to fetch countries');
   }
 });
 
 // Get genres with station counts
-router.get('/genres', async (req: Request, res: Response) => {
+router.get('/genres', async (req: Request, res: Response): Promise<void> => {
   try {
     const genres = await prisma.station.groupBy({
       by: ['genre'],
@@ -207,18 +206,17 @@ router.get('/genres', async (req: Request, res: Response) => {
 
     res.json(formattedGenres);
   } catch (error) {
-    console.error('❌ Error fetching genres:', error);
-    res.status(500).json({ error: 'Failed to fetch genres' });
+    handleError(res, error, 'Failed to fetch genres');
   }
 });
 
 // Update station by ID (supports both numeric and nanoid)
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
       return;
     }
 
@@ -228,7 +226,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     });
     
     if (!existingStation) {
-      res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
       return;
     }
 
@@ -247,37 +245,35 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     res.json(updatedStation);
   } catch (error) {
-    console.error('❌ Error updating station:', error);
-    res.status(500).json({ error: 'Failed to update station' });
+    handleError(res, error, 'Failed to update station');
   }
 });
 
 // Get single station by ID (supports both numeric and nanoid)
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
       return;
     }
 
     const station = await findStationByEitherId(stationIdParam);
 
     if (!station) {
-      res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
       return;
     }
 
     res.json(station);
   } catch (error) {
-    console.error('❌ Error fetching station:', error);
-    res.status(500).json({ error: 'Failed to fetch station' });
+    handleError(res, error, 'Failed to fetch station');
   }
 });
 
 // Add station
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const stationData = req.body;
     
@@ -297,11 +293,13 @@ router.post('/', async (req: Request, res: Response) => {
 
       if (existing) {
         console.log(`⚠️ Duplicate station detected: "${stationData.name}" already exists as ID ${existing.id}`);
-        return res.status(409).json({ 
+        const data = { 
           error: 'Station already exists',
           duplicate: true,
           existingStation: existing
-        });
+        };
+        res.status(409).json(data);
+        return;
       }
     }
     
@@ -330,25 +328,24 @@ router.post('/', async (req: Request, res: Response) => {
         res.json(station);
         return;
       } catch (fallbackError) {
-        console.error('❌ Fallback creation also failed:', fallbackError);
-        res.status(500).json({ error: 'Failed to create station' });
+        handleError(res, fallbackError, 'Failed to create station');
         return;
       }
     }
     
-    res.status(500).json({ error: 'Failed to create station' });
+    handleError(res, error, 'Failed to create station');
   }
 });
 
 // Removed duplicate PUT route - consolidated above
 
 // Delete station (supports both numeric and nanoid)
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
       return;
     }
 
@@ -358,7 +355,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     });
     
     if (!existingStation) {
-      res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
       return;
     }
 
@@ -367,20 +364,20 @@ router.delete('/:id', async (req: Request, res: Response) => {
       where: { id: existingStation.id }
     });
     
-    res.json({ success: true });
+    const data = { success: true };
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error deleting station:', error);
-    res.status(500).json({ error: 'Failed to delete station' });
+    handleError(res, error, 'Failed to delete station');
   }
 });
 
 // Calculate quality score for a station (supports both numeric and nanoid)
-router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
+router.post('/:id/calculate-quality', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stationIdParam, idType } = parseStationIdParam(req);
     
     if (idType === 'invalid') {
-      res.status(400).json({ error: 'Invalid station ID format' });
+      handleValidationError(res, 'Invalid station ID format');
       return;
     }
 
@@ -388,7 +385,7 @@ router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
     const station = await findStationByEitherId(stationIdParam);
 
     if (!station) {
-      res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
       return;
     }
 
@@ -452,7 +449,7 @@ router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
 
     console.log(`✅ Quality score calculated for station ${station.id}: ${qualityScore.toFixed(2)}%`);
 
-    res.json({
+    const data = {
       qualityScore,
       feedbackCount: totalFeedback,
       breakdown: {
@@ -462,10 +459,128 @@ router.post('/:id/calculate-quality', async (req: Request, res: Response) => {
         userSatisfaction: breakdown.userSatisfaction / 0.15,
         metadataRichness: breakdown.metadataRichness / 0.1
       }
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error calculating quality score:', error);
-    res.status(500).json({ error: 'Failed to calculate quality score' });
+    handleError(res, error, 'Failed to calculate quality score');
+  }
+});
+
+// Get recently played tracks for a station (supports both numeric and nanoid)
+router.get('/:id/recently-played', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { stationIdParam, idType } = parseStationIdParam(req);
+    
+    if (idType === 'invalid') {
+      handleValidationError(res, 'Invalid station ID format');
+      return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Build where clause based on station identifier type
+    let whereClause: any = {
+      playedAt: { gte: today }
+    };
+
+    if (idType === 'nanoid') {
+      whereClause.stationNanoid = stationIdParam;
+    } else {
+      whereClause.stationId = parseInt(stationIdParam);
+    }
+
+    const tracks = await prisma.stationPlayHistory.findMany({
+      where: whereClause,
+      include: {
+        track: true
+      },
+      orderBy: { playedAt: 'desc' },
+      take: limit
+    });
+
+    const formattedTracks = tracks.map(play => ({
+      id: play.id,
+      playedAt: play.playedAt,
+      source: play.source,
+      showName: play.showName,
+      djName: play.djName,
+      track: {
+        id: play.track.id,
+        title: play.track.title,
+        artist: play.track.artist,
+        album: play.track.album,
+        artwork: play.track.artwork,
+        duration: play.track.duration
+      }
+    }));
+
+    res.json(formattedTracks);
+  } catch (error) {
+    handleError(res, error, 'Failed to get recently played tracks');
+  }
+});
+
+// Get historical tracks from JSON exports (for dates older than today)
+router.get('/:id/history/:date', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { stationIdParam, idType } = parseStationIdParam(req);
+    const { date } = req.params;
+    
+    if (idType === 'invalid') {
+      handleValidationError(res, 'Invalid station ID format');
+      return;
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      handleValidationError(res, 'Invalid date format. Use YYYY-MM-DD');
+      return;
+    }
+
+    // Check if it's today's date (should use recently-played endpoint instead)
+    const requestedDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (requestedDate.getTime() === today.getTime()) {
+      const data = { 
+        error: 'Use /recently-played endpoint for today\'s tracks',
+        redirect: `/stations/${stationIdParam}/recently-played`
+      };
+      res.status(400).json(data);
+      return;
+    }
+
+    // Fetch from metadata server JSON exports
+    const metadataServerUrl = process.env.METADATA_SERVER_URL || 'https://streemr.ddns.net:3002';
+    const exportUrl = `${metadataServerUrl}/exports/${date}.json`;
+    
+    try {
+      const fetch = (await import('node-fetch')).default;
+      const response = await fetch(exportUrl);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          handleNotFound(res, 'Track data for this date');
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const exportData = await response.json();
+      const stationTracks = exportData.stations[stationIdParam] || [];
+      
+      res.json(stationTracks);
+    } catch (fetchError) {
+      console.error(`❌ Error fetching historical data for ${date}:`, fetchError);
+      res.status(503).json({ error: 'Historical data service unavailable' });
+    }
+  } catch (error) {
+    handleError(res, error, 'Failed to get historical tracks');
   }
 });
 

@@ -1,6 +1,31 @@
 // Core Data Management Module
 // Handles stations data, filtering, pagination, and search functionality
 
+// NanoID Helper Functions
+function generateNanoId() {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    }
+    return result;
+}
+
+function isValidNanoId(id) {
+    return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+}
+
+function getStationIdentifier(station) {
+    return station.nanoid || station.id?.toString();
+}
+
+function findStationById(stations, stationId) {
+    return stations.find(s => {
+        const identifier = getStationIdentifier(s);
+        return identifier === stationId || identifier === stationId.toString();
+    });
+}
+
 // Global data variables
 let stations = [];
 let filteredStations = [];
@@ -14,7 +39,41 @@ document.addEventListener('DOMContentLoaded', function() {
     window.currentActiveFilter = 'active';
     loadStations();
     setupEventListeners();
+    checkForStationIdParameter();
 });
+
+// Check for station ID in URL parameters and auto-open editor
+function checkForStationIdParameter() {
+    // Check if getQueryParam utility is available
+    if (typeof getQueryParam !== 'function') {
+        console.log('getQueryParam utility not available, skipping URL parameter check');
+        return;
+    }
+    
+    const stationId = getQueryParam('id');
+    if (stationId) {
+        console.log('Found station ID in URL parameters:', stationId);
+        
+        // Wait for stations to load, then try to open the editor
+        const checkAndOpenEditor = () => {
+            if (typeof stations !== 'undefined' && stations.length > 0) {
+                // Check if editStation function is available
+                if (typeof editStation === 'function') {
+                    console.log('Opening station editor for ID:', stationId);
+                    editStation(stationId);
+                } else {
+                    console.warn('editStation function not available');
+                }
+            } else {
+                // Stations not loaded yet, try again in 500ms
+                setTimeout(checkAndOpenEditor, 500);
+            }
+        };
+        
+        // Start checking after a brief delay to ensure dependencies are loaded
+        setTimeout(checkAndOpenEditor, 100);
+    }
+}
 
 function setupEventListeners() {
     // Search input
@@ -187,7 +246,7 @@ async function updateStationStatus(stationId, isActiveValue) {
             
             // Update the station in our local data arrays
             const updateStationInArray = (stationArray) => {
-                const stationIndex = stationArray.findIndex(s => s.id === stationId);
+                const stationIndex = stationArray.findIndex(s => getStationIdentifier(s) === stationId);
                 if (stationIndex !== -1) {
                     stationArray[stationIndex] = updatedStation;
                 }
@@ -326,9 +385,9 @@ function toggleSelectAll(event) {
     );
     
     if (isChecked) {
-        currentPageStations.forEach(station => selectedStations.add(station.id));
+        currentPageStations.forEach(station => selectedStations.add(getStationIdentifier(station)));
     } else {
-        currentPageStations.forEach(station => selectedStations.delete(station.id));
+        currentPageStations.forEach(station => selectedStations.delete(getStationIdentifier(station)));
     }
     
     updateSelectedCount();

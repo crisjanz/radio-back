@@ -310,6 +310,31 @@
     </div>
 
     <script>
+        // NanoID Helper Functions
+        function generateNanoId() {
+            const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            return result;
+        }
+
+        function isValidNanoId(id) {
+            return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+        }
+
+        function getStationIdentifier(station) {
+            return station.nanoid || station.id?.toString();
+        }
+
+        function findStationById(stations, stationId) {
+            return stations.find(s => {
+                const identifier = getStationIdentifier(s);
+                return identifier === stationId || identifier === stationId.toString();
+            });
+        }
+
         let currentPage = 1;
         let totalPages = 1;
         let stationsPerPage = 50;
@@ -610,7 +635,7 @@
                     </div>
                     <div class="ml-4 min-w-0 flex-1 overflow-hidden">
                         <div class="text-sm font-medium text-gray-900 truncate">
-                            <button onclick="showStationWebsite(${station.id})" class="text-left hover:text-blue-600 underline cursor-pointer truncate block max-w-full" title="${station.name}">
+                            <button onclick="showStationWebsite('${getStationIdentifier(station)}')" class="text-left hover:text-blue-600 underline cursor-pointer truncate block max-w-full" title="${station.name}">
                                 ${station.name}
                             </button>
                         </div>
@@ -650,7 +675,7 @@
             toggleInput.type = 'checkbox';
             toggleInput.checked = station.isActive || false;
             toggleInput.onchange = function() {
-                toggleStationStatus(station.id, this.checked);
+                toggleStationStatus(getStationIdentifier(station), this.checked);
             };
             const toggleSlider = document.createElement('span');
             toggleSlider.className = 'slider';
@@ -669,7 +694,7 @@
             editBtn.className = 'text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition-colors';
             editBtn.title = 'Edit logo URL';
             editBtn.innerHTML = '<i class="fas fa-edit text-lg"></i>';
-            editBtn.onclick = function() { editLogo(station.id); };
+            editBtn.onclick = function() { editLogo(getStationIdentifier(station)); };
             actionsContainer.appendChild(editBtn);
 
             // Download buttons
@@ -678,14 +703,14 @@
                 downloadNewBtn.className = 'text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition-colors';
                 downloadNewBtn.title = 'Download new logo';
                 downloadNewBtn.innerHTML = '<i class="fas fa-download text-lg"></i>';
-                downloadNewBtn.onclick = function() { downloadNewLogo(station.id); };
+                downloadNewBtn.onclick = function() { downloadNewLogo(getStationIdentifier(station)); };
                 actionsContainer.appendChild(downloadNewBtn);
             } else if (station.logo) {
                 const downloadBtn = document.createElement('button');
                 downloadBtn.className = 'text-purple-600 hover:text-purple-900 p-2 hover:bg-purple-50 rounded-lg transition-colors';
                 downloadBtn.title = 'Download to local storage';
                 downloadBtn.innerHTML = '<i class="fas fa-cloud-download-alt text-lg"></i>';
-                downloadBtn.onclick = function() { downloadLogo(station.id); };
+                downloadBtn.onclick = function() { downloadLogo(getStationIdentifier(station)); };
                 actionsContainer.appendChild(downloadBtn);
             }
 
@@ -695,7 +720,7 @@
                 editImageBtn.className = 'text-orange-600 hover:text-orange-900 p-2 hover:bg-orange-50 rounded-lg transition-colors';
                 editImageBtn.title = 'Edit image';
                 editImageBtn.innerHTML = '<i class="fas fa-paint-brush text-lg"></i>';
-                editImageBtn.onclick = function() { editStationImage(station.id, station.name); };
+                editImageBtn.onclick = function() { editStationImage(getStationIdentifier(station), station.name); };
                 actionsContainer.appendChild(editImageBtn);
             }
 
@@ -732,7 +757,7 @@
 
                 if (response.ok) {
                     // Update local data
-                    const station = allStations.find(s => s.id === stationId);
+                    const station = findStationById(allStations, stationId);
                     if (station) {
                         station.isActive = isActive;
                         updateStats();
@@ -750,7 +775,7 @@
         }
 
         function editLogo(stationId) {
-            const station = allStations.find(s => s.id === stationId);
+            const station = findStationById(allStations, stationId);
             if (!station) return;
 
             currentEditingStationId = stationId;
@@ -796,7 +821,7 @@
 
                 if (response.ok) {
                     // Update local data
-                    const station = allStations.find(s => s.id === currentEditingStationId);
+                    const station = findStationById(allStations, currentEditingStationId);
                     if (station) {
                         station.logo = logoUrl;
                         updateStats();
@@ -814,7 +839,7 @@
         }
 
         async function downloadLogo(stationId) {
-            const station = allStations.find(s => s.id === stationId);
+            const station = findStationById(allStations, stationId);
             if (!station) {
                 alert('Station not found');
                 return;
@@ -863,7 +888,7 @@
         }
 
         async function downloadNewLogo(stationId) {
-            const station = allStations.find(s => s.id === stationId);
+            const station = findStationById(allStations, stationId);
             if (!station) {
                 alert('Station not found');
                 return;
@@ -916,7 +941,7 @@
         }
 
         function editStationImage(stationId, stationName) {
-            const station = allStations.find(s => s.id === stationId);
+            const station = findStationById(allStations, stationId);
             if (!station) {
                 alert('Station not found');
                 return;
@@ -983,7 +1008,7 @@
                     console.log('Updated station data:', updatedStation);
                     
                     // Update the station in our local array
-                    const stationIndex = allStations.findIndex(s => s.id === stationId);
+                    const stationIndex = allStations.findIndex(s => getStationIdentifier(s) === stationId);
                     if (stationIndex !== -1) {
                         // Force cache bust for the image URL if it has a timestamp
                         if (updatedStation.local_image_url) {
@@ -1031,7 +1056,7 @@
             
             for (const station of stationsWithoutLogos) {
                 try {
-                    const response = await fetch(`/stations/${station.id}`, {
+                    const response = await fetch(`/stations/${getStationIdentifier(station)}`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1064,7 +1089,7 @@
         }
 
         function showStationWebsite(stationId) {
-            const station = allStations.find(s => s.id === stationId);
+            const station = findStationById(allStations, stationId);
             if (!station) return;
 
             currentWebsiteStationId = stationId;

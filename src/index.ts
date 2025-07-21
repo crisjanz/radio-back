@@ -18,6 +18,7 @@ import imageRoutes from './routes/images.js';
 import imageProxyRoutes from './routes/image-proxy.js';
 import memoryRoutes from './routes/memory.js';
 import feedbackRoutes from './routes/feedback.js';
+import tracksRoutes from './routes/tracks.js';
 import { memoryMonitor } from './middleware/memoryMonitor.js';
 import path from 'path';
 
@@ -53,6 +54,7 @@ app.use('/images', imageRoutes);
 app.use('/image-proxy', imageProxyRoutes);
 app.use('/memory', memoryRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/tracks', tracksRoutes);
 
 // Admin routes for static HTML pages
 app.get('/admin/stations', (req: Request, res: Response) => {

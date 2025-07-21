@@ -1,10 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { memoryMonitor } from '../middleware/memoryMonitor.js';
+import { RouteHandler, handleError } from '../types/express';
 
 const router = Router();
 
 // Get current memory usage statistics
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', (async (req, res) => {
   try {
     const usage = memoryMonitor.getMemoryUsage();
     const processUptime = Math.floor(process.uptime());
@@ -29,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
       statusColor = 'yellow';
     }
     
-    return res.json({
+    const data = {
       success: true,
       memory: {
         heapUsed: usage.heapUsed,
@@ -54,15 +55,13 @@ router.get('/', async (req: Request, res: Response) => {
         warning: '350-400 MB',
         critical: '> 400 MB'
       }
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error fetching memory stats:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to fetch memory stats' 
-    });
+    handleError(res, error, 'Failed to fetch memory stats');
   }
-});
+}) as RouteHandler);
 
 // Format uptime in human readable format
 function formatUptime(seconds: number): string {

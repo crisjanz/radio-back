@@ -4,21 +4,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const express_2 = require("../types/express");
 const router = express_1.default.Router();
 router.get('/stream', async (req, res) => {
     try {
         const streamUrl = req.query.url;
         if (!streamUrl) {
-            return res.status(400).json({ error: 'Stream URL is required' });
+            (0, express_2.handleValidationError)(res, 'Stream URL is required');
+            return;
         }
         try {
             const url = new URL(streamUrl);
             if (!['http:', 'https:'].includes(url.protocol)) {
-                return res.status(400).json({ error: 'Invalid stream URL protocol' });
+                (0, express_2.handleValidationError)(res, 'Invalid stream URL protocol');
+                return;
             }
         }
         catch {
-            return res.status(400).json({ error: 'Invalid stream URL format' });
+            (0, express_2.handleValidationError)(res, 'Invalid stream URL format');
+            return;
         }
         console.log('📡 Proxying stream:', streamUrl);
         const response = await fetch(streamUrl, {
@@ -30,9 +34,10 @@ router.get('/stream', async (req, res) => {
         });
         if (!response.ok) {
             console.error('Stream fetch failed:', response.status, response.statusText);
-            return res.status(response.status).json({
+            res.status(response.status).json({
                 error: `Stream not available: ${response.statusText}`
             });
+            return;
         }
         res.setHeader('Content-Type', response.headers.get('Content-Type') || 'audio/mpeg');
         res.setHeader('Accept-Ranges', 'bytes');
@@ -80,6 +85,7 @@ router.get('/stream', async (req, res) => {
         }
         else {
             res.status(500).json({ error: 'No stream data available' });
+            return;
         }
     }
     catch (error) {

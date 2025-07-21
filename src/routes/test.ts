@@ -1,35 +1,34 @@
 import { Router, Request, Response } from 'express';
+import { handleError } from '../types/express';
 
 const router = Router();
 
 // GET /api/test/ping - returns server status and timestamp
-router.get('/ping', async (req: Request, res: Response) => {
+router.get('/ping', async (req: Request, res: Response): Promise<void> => {
   try {
-    return res.json({
+    const data = {
       message: "Local backend is working!",
       timestamp: Date.now(),
       server: "LOCAL"
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error in test ping endpoint:', error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Test ping failed' 
-    });
+    handleError(res, error, 'Test ping failed');
   }
 });
 
 // GET /api/test/env - returns environment information
-router.get('/env', async (req: Request, res: Response) => {
+router.get('/env', async (req: Request, res: Response): Promise<void> => {
   try {
-    return res.json({
+    const data = {
       environment: process.env.NODE_ENV || 'development',
       port: process.env.PORT || '3001'
-    });
+    };
+    
+    res.json(data);
   } catch (error) {
-    console.error('❌ Error in test env endpoint:', error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Test env failed' 
-    });
+    handleError(res, error, 'Test env failed');
   }
 });
 

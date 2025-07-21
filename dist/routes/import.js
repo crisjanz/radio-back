@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 async function getNextAvailableStationId() {
@@ -179,20 +180,17 @@ router.post('/radio-browser', async (req, res) => {
             }
         }
         console.log(`✅ Import complete: ${imported} imported, ${skipped} skipped`);
-        return res.json({
+        const data = {
             success: true,
             imported,
             skipped,
             total: stations.length,
             errors: errors.slice(0, 10)
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error during Radio-Browser import:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Import failed'
-        });
+        (0, express_2.handleError)(res, error, 'Radio-Browser import failed');
     }
 });
 router.post('/quick-start', async (req, res) => {
@@ -226,19 +224,16 @@ router.post('/quick-start', async (req, res) => {
             }
         }
         console.log(`🎉 Quick import complete: ${totalImported} total imported, ${totalSkipped} total skipped`);
-        return res.json({
+        const data = {
             success: true,
             imported: totalImported,
             skipped: totalSkipped,
             countries: countries.length
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error during quick import:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Quick import failed'
-        });
+        (0, express_2.handleError)(res, error, 'Quick import failed');
     }
 });
 router.get('/countries', async (req, res) => {
@@ -252,11 +247,11 @@ router.get('/countries', async (req, res) => {
             .filter(country => country.stationcount > 0)
             .map(country => country.name)
             .sort();
-        return res.json({ countries: countryNames });
+        const data = { countries: countryNames };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching countries:', error);
-        return res.status(500).json({ error: 'Failed to fetch countries' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch countries');
     }
 });
 router.get('/states/:country', async (req, res) => {
@@ -280,11 +275,11 @@ router.get('/states/:country', async (req, res) => {
             }
         });
         const stateNames = Array.from(stateSet).sort();
-        return res.json({ states: stateNames });
+        const data = { states: stateNames };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching states:', error);
-        return res.status(500).json({ error: 'Failed to fetch states' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch states');
     }
 });
 router.get('/preview', async (req, res) => {
@@ -338,18 +333,19 @@ router.get('/preview', async (req, res) => {
             console.log(`🌍 After geo filter: ${beforeGeo} -> ${filteredStations.length} stations`);
         }
         console.log(`🔍 Filtered ${allStations.length} -> ${filteredStations.length} stations (type: ${stationType || 'all'})`);
-        return res.json({ stations: filteredStations });
+        const data = { stations: filteredStations };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching preview stations:', error);
-        return res.status(500).json({ error: 'Failed to fetch preview stations' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch preview stations');
     }
 });
 router.post('/stations', async (req, res) => {
     try {
         const { stations } = req.body;
         if (!Array.isArray(stations) || stations.length === 0) {
-            return res.status(400).json({ error: 'No stations provided' });
+            (0, express_2.handleValidationError)(res, 'No stations provided');
+            return;
         }
         let imported = 0;
         let duplicates = 0;
@@ -407,19 +403,16 @@ router.post('/stations', async (req, res) => {
             }
         }
         console.log(`🎉 Import complete: ${imported} imported, ${duplicates} duplicates, ${errors.length} errors`);
-        return res.json({
+        const data = {
             success: true,
             imported,
             duplicates,
             errors
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error importing stations:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Import failed'
-        });
+        (0, express_2.handleError)(res, error, 'Stations import failed');
     }
 });
 router.get('/stats', async (req, res) => {
@@ -437,16 +430,16 @@ router.get('/stats', async (req, res) => {
                 take: 10
             })
         ]);
-        return res.json({
+        const data = {
             totalStations,
             countries: countryCounts.length,
             topCountries: countryCounts.slice(0, 10),
             recentImports
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error fetching import stats:', error);
-        return res.status(500).json({ error: 'Failed to fetch import statistics' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch import statistics');
     }
 });
 router.get('/missing-ratings', async (req, res) => {
@@ -466,7 +459,7 @@ router.get('/missing-ratings', async (req, res) => {
             }),
             prisma.station.count()
         ]);
-        return res.json({
+        const data = {
             success: true,
             summary: {
                 totalStations,
@@ -476,14 +469,11 @@ router.get('/missing-ratings', async (req, res) => {
                 missingAny,
                 percentageComplete: Math.round(((totalStations - missingAny) / totalStations) * 100)
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error checking missing ratings:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Failed to check missing ratings'
-        });
+        (0, express_2.handleError)(res, error, 'Failed to check missing ratings');
     }
 });
 router.post('/update-ratings', async (req, res) => {
@@ -584,7 +574,7 @@ router.post('/update-ratings', async (req, res) => {
             }
         }
         console.log(`🎉 Bulk update complete: ${updated} updated, ${notFound} not found, ${errors} errors`);
-        return res.json({
+        const data = {
             success: true,
             summary: {
                 totalProcessed: stationsToUpdate.length,
@@ -593,14 +583,11 @@ router.post('/update-ratings', async (req, res) => {
                 errors
             },
             results
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error in bulk ratings update:', error);
-        return res.status(500).json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Bulk update failed'
-        });
+        (0, express_2.handleError)(res, error, 'Bulk ratings update failed');
     }
 });
 exports.default = router;

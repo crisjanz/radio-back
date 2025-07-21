@@ -152,6 +152,31 @@
 
     <script src="/js/utilities.js"></script>
     <script>
+        // NanoID Helper Functions
+        function generateNanoId() {
+            const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            return result;
+        }
+
+        function isValidNanoId(id) {
+            return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+        }
+
+        function getStationIdentifier(station) {
+            return station.nanoid || station.id?.toString();
+        }
+
+        function findStationById(stations, stationId) {
+            return stations.find(s => {
+                const identifier = getStationIdentifier(s);
+                return identifier === stationId || identifier === stationId.toString();
+            });
+        }
+
         let duplicateGroups = [];
         let pendingDeletion = null;
 
@@ -279,7 +304,7 @@
                             <div class="station-card bg-gray-50 border border-gray-200 rounded-lg p-3">
                                 <div class="flex justify-between items-start mb-2">
                                     <h4 class="font-medium text-sm text-gray-900 truncate">${escapeHtml(station.name || 'Unnamed')}</h4>
-                                    <span class="text-xs text-gray-500 ml-2">ID: ${station.id}</span>
+                                    <span class="text-xs text-gray-500 ml-2">ID: ${getStationIdentifier(station)}</span>
                                 </div>
                                 
                                 <div class="text-xs text-gray-600 space-y-1">
@@ -290,10 +315,10 @@
                                 </div>
                                 
                                 <div class="flex justify-between items-center mt-3">
-                                    <button onclick="viewStation(${station.id})" class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                                    <button onclick="viewStation('${getStationIdentifier(station)}')" class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
                                         <i class="fas fa-eye mr-1"></i>View
                                     </button>
-                                    <button onclick="deleteStation(${station.id}, '${escapeHtml(station.name || 'Unnamed')}')" class="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
+                                    <button onclick="deleteStation('${getStationIdentifier(station)}', '${escapeHtml(station.name || 'Unnamed')}')" class="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
                                         <i class="fas fa-trash mr-1"></i>Delete
                                     </button>
                                 </div>
@@ -309,7 +334,7 @@
             const group = duplicateGroups[groupIndex];
             if (!group || group.stations.length < 2) return;
             
-            if (!confirm(`Auto cleanup will keep the first station (ID: ${group.stations[0].id}) and delete ${group.stations.length - 1} duplicates. Continue?`)) {
+            if (!confirm(`Auto cleanup will keep the first station (ID: ${getStationIdentifier(group.stations[0])}) and delete ${group.stations.length - 1} duplicates. Continue?`)) {
                 return;
             }
             
@@ -317,18 +342,18 @@
                 // Delete all except the first station
                 for (let i = 1; i < group.stations.length; i++) {
                     const station = group.stations[i];
-                    console.log(`🗑️ Deleting duplicate station ID ${station.id}: ${station.name}`);
+                    console.log(`🗑️ Deleting duplicate station ID ${getStationIdentifier(station)}: ${station.name}`);
                     
-                    const response = await fetch(`/stations/${station.id}`, {
+                    const response = await fetch(`/stations/${getStationIdentifier(station)}`, {
                         method: 'DELETE'
                     });
                     
                     if (!response.ok) {
-                        throw new Error(`Failed to delete station ${station.id}`);
+                        throw new Error(`Failed to delete station ${getStationIdentifier(station)}`);
                     }
                 }
                 
-                showSuccess(`Successfully cleaned up group ${groupIndex + 1}. Kept station ID ${group.stations[0].id}, deleted ${group.stations.length - 1} duplicates.`);
+                showSuccess(`Successfully cleaned up group ${groupIndex + 1}. Kept station ID ${getStationIdentifier(group.stations[0])}, deleted ${group.stations.length - 1} duplicates.`);
                 
                 // Rescan for duplicates
                 await scanForDuplicates();
@@ -356,16 +381,16 @@
                     // Delete all except the first station in each group
                     for (let i = 1; i < group.stations.length; i++) {
                         const station = group.stations[i];
-                        console.log(`🗑️ Deleting duplicate station ID ${station.id}: ${station.name}`);
+                        console.log(`🗑️ Deleting duplicate station ID ${getStationIdentifier(station)}: ${station.name}`);
                         
-                        const response = await fetch(`/stations/${station.id}`, {
+                        const response = await fetch(`/stations/${getStationIdentifier(station)}`, {
                             method: 'DELETE'
                         });
                         
                         if (response.ok) {
                             deletedCount++;
                         } else {
-                            console.error(`Failed to delete station ${station.id}`);
+                            console.error(`Failed to delete station ${getStationIdentifier(station)}`);
                         }
                     }
                 }
@@ -394,7 +419,7 @@
             if (!pendingDeletion) return;
             
             try {
-                const response = await fetch(`/stations/${pendingDeletion.id}`, {
+                const response = await fetch(`/stations/${getStationIdentifier(pendingDeletion)}`, {
                     method: 'DELETE'
                 });
                 

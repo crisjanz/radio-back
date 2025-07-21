@@ -1,12 +1,13 @@
 // scraping.ts
 import { Router, Request, Response } from 'express';
 import fetch from 'node-fetch';
+import { handleError } from '../types/express';
 
 const router = Router();
 
 // Base scraping endpoint
-router.get('/', async (req: Request, res: Response) => {
-  return res.json({
+router.get('/', async (req: Request, res: Response): Promise<void> => {
+  const data = {
     success: true,
     message: 'Web scraping service is running',
     description: 'Extract business information from websites and Google Maps URLs',
@@ -27,7 +28,9 @@ router.get('/', async (req: Request, res: Response) => {
         url: 'https://example.com or Google Maps URL'
       }
     }
-  });
+  };
+  
+  res.json(data);
 });
 
 // HTML entity decoder function
@@ -60,13 +63,14 @@ const decodeHtmlEntities = (text: string): string => {
 };
 
 // Web scraping endpoint for business information
-router.post('/business', async (req: Request, res: Response) => {
+router.post('/business', async (req: Request, res: Response): Promise<void> => {
   const { url } = req.body;
   
   console.log(`🕷️ Scraping business info from: ${url}`);
   
   if (!url) {
-    return res.status(400).json({ success: false, error: 'URL is required' });
+    res.status(400).json({ success: false, error: 'URL is required' });
+    return;
   }
 
   try {
@@ -735,35 +739,37 @@ router.post('/business', async (req: Request, res: Response) => {
     if (!hasUsefulData) {
       if (finalUrl.includes('google.com/maps') || finalUrl.includes('maps.google.com')) {
         console.log('⚠️ Google Maps scraping failed - likely due to JavaScript rendering');
-        return res.json({
+        const data = {
           success: false,
           error: 'Google Maps pages require JavaScript to load content. Try using the business\'s official website instead, or copy information manually.',
           suggestion: 'For Google Maps: 1) Right-click on the place → "What\'s here?" to get coordinates, 2) Check if the business has a website link, 3) Use the business name to search for their official website.'
-        });
+        };
+        res.json(data);
+        return;
       } else {
         console.log('⚠️ Website scraping found no useful business information');
-        return res.json({
+        const data = {
           success: false,
           error: 'No useful business information found on this page. The page may not contain structured data or may require JavaScript to load content.',
           suggestion: 'Try: 1) A different page on the same website (like an "About" or "Contact" page), 2) The business\'s Google Maps listing, 3) Copy information manually from the website.'
-        });
+        };
+        res.json(data);
+        return;
       }
     }
 
     console.log(`✅ Scraping successful from ${source}:`, businessInfo);
 
-    return res.json({
+    const data = {
       success: true,
       data: businessInfo,
       source: source
-    });
+    };
+    
+    res.json(data);
 
   } catch (error) {
-    console.error('❌ Scraping failed:', error);
-    return res.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to scrape business information'
-    });
+    handleError(res, error, 'Failed to scrape business information');
   }
 });
 

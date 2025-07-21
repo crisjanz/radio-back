@@ -117,3 +117,54 @@ model StationFeedback {
   // Relations
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
+
+model Track {
+  id              String @id @default(cuid())
+  title           String
+  artist          String?
+  album           String?
+  artwork         String?
+  duration        Int?    // Duration in seconds
+  
+  // Deduplication fields
+  normalizedTitle String  // Lowercase, special chars removed
+  normalizedArtist String? // Lowercase, special chars removed
+  
+  // Rich metadata for song info pages
+  spotifyId       String? // Spotify track ID for streaming links
+  itunesId        String? // iTunes track ID for purchasing
+  genre           String? // Song genre
+  releaseDate     DateTime? // Album/single release date
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  
+  // Relations
+  playHistory     StationPlayHistory[]
+  
+  // Unique constraint for deduplication
+  @@unique([normalizedTitle, normalizedArtist])
+  @@index([normalizedTitle])
+  @@index([createdAt]) // Critical for daily cleanup
+}
+
+model StationPlayHistory {
+  id        String   @id @default(cuid())
+  stationId Int?     // Legacy station ID (temporary)
+  stationNanoid String? @db.VarChar(8) // Station NanoID (preferred)
+  trackId   String   // Track that was played
+  playedAt  DateTime @default(now())
+  source    String   // 'rogers', 'icecast', 'custom-api', etc.
+  
+  // Rich metadata context
+  showName     String? // Radio show name if available
+  djName       String? // DJ name if available
+  
+  // Relations
+  track   Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  
+  @@index([stationId, playedAt]) // Fast station queries (legacy)
+  @@index([stationNanoid, playedAt]) // Fast station queries (NanoID)
+  @@index([trackId, playedAt])   // Fast track queries
+  @@index([playedAt])            // Critical for daily cleanup
+}

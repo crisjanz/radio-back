@@ -287,12 +287,36 @@
 
     <!-- Import-specific JavaScript -->
     <script>
+        // NanoID Helper Functions
+        function generateNanoId() {
+            const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            return result;
+        }
+
+        function isValidNanoId(id) {
+            return typeof id === 'string' && /^[0-9A-Za-z]{8}$/.test(id);
+        }
+
+        function getStationIdentifier(station) {
+            return station.nanoid || station.id?.toString();
+        }
+
+        function findStationById(stations, stationId) {
+            return stations.find(s => {
+                const identifier = getStationIdentifier(s);
+                return identifier === stationId || identifier === stationId.toString();
+            });
+        }
+
         // Import page variables
         let allSearchResults = []; // Unfiltered results from API
         let searchResults = []; // Filtered results for display
         let selectedStationIds = new Set();
         let importedStations = new Set();
-        let duplicateStations = new Map(); // Maps station index to existing station info
         let countries = [];
         let states = [];
         
@@ -450,65 +474,7 @@
             }
         }
 
-        let allExistingStations = [];
-
-        async function loadAllStations() {
-            try {
-                console.log('🔄 Loading existing stations for duplicate checking...');
-                const response = await fetch('/stations');
-                if (response.ok) {
-                    allExistingStations = await response.json();
-                    console.log(`✅ Loaded ${allExistingStations.length} existing stations`);
-                } else {
-                    console.error('Failed to load existing stations:', response.status);
-                }
-            } catch (error) {
-                console.error('❌ Error loading existing stations:', error);
-            }
-        }
-
-        async function checkDuplicates() {
-            console.log('🔍 Checking for duplicates...');
-            duplicateStations.clear();
-            
-            // Load existing stations if not already loaded
-            if (allExistingStations.length === 0) {
-                await loadAllStations();
-            }
-            
-            try {
-                // Check each search result against existing stations
-                for (let i = 0; i < searchResults.length; i++) {
-                    const station = searchResults[i];
-                    const streamUrl = station.url_resolved || station.url;
-                    
-                    // Find exact matches using the same logic as backend
-                    const duplicate = allExistingStations.find(existing => {
-                        // Check by stream URL first (most reliable)
-                        if (streamUrl && existing.streamUrl === streamUrl) {
-                            return true;
-                        }
-                        
-                        // Check by name + country combination
-                        if (station.name && station.country && 
-                            existing.name === station.name && existing.country === station.country) {
-                            return true;
-                        }
-                        
-                        return false;
-                    });
-                    
-                    if (duplicate) {
-                        duplicateStations.set(i, duplicate);
-                        console.log(`⚠️ Duplicate found: "${station.name}" matches existing station ID ${duplicate.id}`);
-                    }
-                }
-                
-                console.log(`✅ Duplicate check complete: ${duplicateStations.size} duplicates found`);
-            } catch (error) {
-                console.error('❌ Error checking duplicates:', error);
-            }
-        }
+        // Duplicate protection removed per user request
 
         async function searchStations() {
             // Show loading state
@@ -541,9 +507,6 @@
                 
                 // Apply client-side filtering
                 applyClientSideFilters();
-                
-                // Check for duplicates against existing stations
-                await checkDuplicates();
                 
                 // Update UI
                 document.getElementById('results-count').textContent = searchResults.length;
@@ -668,20 +631,14 @@
             row.className = 'station-row';
             row.id = `station-row-${index}`;
             
-            // Check if this is a duplicate
-            const existingStation = duplicateStations.get(index);
-            const isDuplicate = !!existingStation;
+            // No duplicate checking needed
             
             // Determine status
             let statusClass = '';
             let statusText = 'Ready to import';
             let statusIcon = 'fa-download';
             
-            if (isDuplicate) {
-                statusClass = 'status-exists';
-                statusText = `Exists (ID: ${existingStation.id})`;
-                statusIcon = 'fa-exclamation-triangle';
-            } else if (importedStations.has(station.stationuuid)) {
+            if (importedStations.has(station.stationuuid)) {
                 statusClass = 'status-imported';
                 statusText = 'Imported';
                 statusIcon = 'fa-check';
@@ -730,17 +687,12 @@
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex space-x-2">
-                        ${isDuplicate ? 
-                            `<button onclick="viewExistingStation(${existingStation.id})" class="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors">
-                                <i class="fas fa-eye mr-1"></i>View Existing
-                            </button>` :
-                            `<button onclick="editAndImportStation(${index})" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
-                                <i class="fas fa-edit mr-1"></i>Edit & Save
-                            </button>
-                            <button onclick="importStationAsIs(${index})" class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
-                                <i class="fas fa-download mr-1"></i>Import As-Is
-                            </button>`
-                        }
+                        <button onclick="editAndImportStation(${index})" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
+                            <i class="fas fa-edit mr-1"></i>Edit & Save
+                        </button>
+                        <button onclick="importStationAsIs(${index})" class="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors" ${importedStations.has(station.stationuuid) ? 'disabled' : ''}>
+                            <i class="fas fa-download mr-1"></i>Import As-Is
+                        </button>
                     </div>
                 </td>
             `;
@@ -814,12 +766,7 @@
             const station = searchResults[index];
             if (!station) return;
             
-            // Double-check for duplicates before importing
-            if (duplicateStations.has(index)) {
-                const existingStation = duplicateStations.get(index);
-                alert(`This station already exists in the database (ID: ${existingStation.id}). Use "View Existing" to see it.`);
-                return;
-            }
+            // No duplicate checking needed
             
             try {
                 // Stage 1: Create minimal station record to get ID
@@ -836,18 +783,14 @@
                 
                 if (response.ok) {
                     const savedStation = await response.json();
-                    console.log(`✅ Stage 1 complete: Station created with ID ${savedStation.id}`);
+                    const stationId = getStationIdentifier(savedStation);
+                    console.log(`✅ Stage 1 complete: Station created with ID ${stationId}`);
                     
                     // Stage 2: Open editor with the saved station (now has ID)
-await editStationForImport(savedStation);
+                    await editStationForImport(savedStation);
                     
                     // Mark as imported in UI
                     markStationAsImported(index, station.stationuuid);
-                } else if (response.status === 409) {
-                    // Duplicate detected - this shouldn't happen since we check duplicates first
-                    const error = await response.json();
-                    console.warn('⚠️ Duplicate detected during import:', error);
-                    alert(`Station already exists: ${error.existingStation?.name || 'Unknown'}`);
                 } else {
                     throw new Error(`Failed to create station: ${response.status}`);
                 }
@@ -929,11 +872,6 @@ await editStationForImport(savedStation);
                     const savedStation = await response.json();
                     markStationAsImported(index, station.stationuuid);
                     showSuccess(`Successfully imported "${station.name}"`);
-                } else if (response.status === 409) {
-                    // Duplicate detected
-                    const error = await response.json();
-                    markStationAsExists(index, station.stationuuid);
-                    showError(`Station "${station.name}" already exists in database (ID: ${error.existingStation?.id})`);
                 } else {
                     const error = await response.json();
                     showError(`Failed to import "${station.name}": ${error.error || 'Unknown error'}`);
@@ -978,11 +916,6 @@ await editStationForImport(savedStation);
                     if (response.ok) {
                         markStationAsImported(index, station.stationuuid);
                         imported++;
-                    } else if (response.status === 409) {
-                        // Duplicate detected
-                        markStationAsExists(index, station.stationuuid);
-                        console.log(`Duplicate detected: ${station.name}`);
-                        imported++; // Count as "processed"
                     } else {
                         failed++;
                         console.error(`Failed to import ${station.name}`);
@@ -1002,6 +935,7 @@ await editStationForImport(savedStation);
 
         function convertRadioBrowserStation(rbStation) {
             return {
+                nanoid: generateNanoId(), // Generate NanoID for new stations
                 name: rbStation.name || 'Unknown Station',
                 streamUrl: rbStation.url_resolved || rbStation.url || '',
                 homepage: rbStation.homepage || null,
@@ -1058,38 +992,7 @@ await editStationForImport(savedStation);
             updateSelectAllCheckbox();
         }
 
-        function markStationAsExists(index, uuid) {
-            importedStations.add(uuid); // Mark as processed to prevent re-selection
-            selectedStationIds.delete(index);
-            
-            // Update the row to show already exists status
-            const row = document.getElementById(`station-row-${index}`);
-            if (row) {
-                const statusCell = row.cells[6]; // Status column
-                const actionsCell = row.cells[7]; // Actions column
-                
-                statusCell.innerHTML = `
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-exists">
-                        <i class="fas fa-exclamation-triangle mr-1"></i>
-                        Already Exists
-                    </span>
-                `;
-                
-                // Disable action buttons
-                const buttons = actionsCell.querySelectorAll('button');
-                buttons.forEach(btn => btn.disabled = true);
-                
-                // Uncheck and disable checkbox
-                const checkbox = row.cells[0].querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    checkbox.checked = false;
-                    checkbox.disabled = true;
-                }
-            }
-            
-            updateSelectedCount();
-            updateSelectAllCheckbox();
-        }
+        // markStationAsExists function removed (no duplicate checking needed)
 
         // Helper functions for city extraction (same logic as backend)
         function extractCityFromState(state) {
@@ -1154,6 +1057,7 @@ await editStationForImport(savedStation);
                 
                 // Create a blank station object for the modal
                 const blankStation = {
+                    nanoid: generateNanoId(), // Generate NanoID for manual stations too
                     id: 'NEW',
                     name: '',
                     country: '',
@@ -1215,18 +1119,7 @@ await editStationForImport(savedStation);
         // Import-specific save override is no longer needed
         // The modal now handles saving properly through station-editor.js
 
-        // View existing station function
-        async function viewExistingStation(stationId) {
-            try {
-                console.log(`🔍 Viewing existing station ID: ${stationId}`);
-                
-                // Redirect to the edit stations page with the station ID
-                window.open(`/admin/stations/edit?id=${stationId}`, '_blank');
-            } catch (error) {
-                console.error('❌ Error viewing existing station:', error);
-                alert('Failed to view existing station');
-            }
-        }
+        // viewExistingStation function removed (no duplicate checking needed)
         // Load modal on page load
         document.addEventListener('DOMContentLoaded', async function() {
             try {

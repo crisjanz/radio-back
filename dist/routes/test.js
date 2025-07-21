@@ -1,34 +1,31 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
 router.get('/ping', async (req, res) => {
     try {
-        return res.json({
+        const data = {
             message: "Local backend is working!",
             timestamp: Date.now(),
             server: "LOCAL"
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error in test ping endpoint:', error);
-        return res.status(500).json({
-            error: error instanceof Error ? error.message : 'Test ping failed'
-        });
+        (0, express_2.handleError)(res, error, 'Test ping failed');
     }
 });
 router.get('/env', async (req, res) => {
     try {
-        return res.json({
+        const data = {
             environment: process.env.NODE_ENV || 'development',
             port: process.env.PORT || '3001'
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error in test env endpoint:', error);
-        return res.status(500).json({
-            error: error instanceof Error ? error.message : 'Test env failed'
-        });
+        (0, express_2.handleError)(res, error, 'Test env failed');
     }
 });
 exports.default = router;

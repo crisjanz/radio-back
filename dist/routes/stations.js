@@ -1,8 +1,42 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const station_lookup_1 = require("../utils/station-lookup");
+const express_2 = require("../types/express");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 async function getNextAvailableStationId() {
@@ -44,13 +78,14 @@ router.get('/', async (req, res) => {
             prisma.station.count({ where: whereClause })
         ]);
         if (req.query.page || req.query.limit) {
-            res.json({
+            const data = {
                 stations,
                 total,
                 page,
                 limit,
                 totalPages: Math.ceil(total / limit)
-            });
+            };
+            res.json(data);
             return;
         }
         else {
@@ -60,16 +95,14 @@ router.get('/', async (req, res) => {
         }
     }
     catch (error) {
-        console.error('❌ Error fetching stations:', error);
-        res.status(500).json({ error: 'Failed to fetch stations' });
-        return;
+        (0, express_2.handleError)(res, error, 'Failed to fetch stations');
     }
 });
 router.get('/search', async (req, res) => {
     try {
         const query = req.query.q;
         if (!query || query.trim().length < 2) {
-            res.status(400).json({ error: 'Search query must be at least 2 characters long' });
+            (0, express_2.handleValidationError)(res, 'Search query must be at least 2 characters long');
             return;
         }
         const searchTerm = query.trim();
@@ -95,8 +128,7 @@ router.get('/search', async (req, res) => {
         res.json(stations);
     }
     catch (error) {
-        console.error('❌ Error searching stations:', error);
-        res.status(500).json({ error: 'Failed to search stations' });
+        (0, express_2.handleError)(res, error, 'Failed to search stations');
     }
 });
 router.get('/stats', async (req, res) => {
@@ -119,16 +151,16 @@ router.get('/stats', async (req, res) => {
                 }
             })
         ]);
-        res.json({
+        const data = {
             total,
             active: total,
             withImages,
             recentImports
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('Error getting database stats:', error);
-        res.status(500).json({ error: 'Failed to get database stats' });
+        (0, express_2.handleError)(res, error, 'Failed to get database stats');
     }
 });
 router.get('/countries', async (req, res) => {
@@ -149,8 +181,7 @@ router.get('/countries', async (req, res) => {
         res.json(formattedCountries);
     }
     catch (error) {
-        console.error('❌ Error fetching countries:', error);
-        res.status(500).json({ error: 'Failed to fetch countries' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch countries');
     }
 });
 router.get('/genres', async (req, res) => {
@@ -176,22 +207,21 @@ router.get('/genres', async (req, res) => {
         res.json(formattedGenres);
     }
     catch (error) {
-        console.error('❌ Error fetching genres:', error);
-        res.status(500).json({ error: 'Failed to fetch genres' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch genres');
     }
 });
 router.put('/:id', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
             return;
         }
         const existingStation = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, nanoid: true }
         });
         if (!existingStation) {
-            res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
             return;
         }
         const updateData = req.body;
@@ -203,27 +233,25 @@ router.put('/:id', async (req, res) => {
         res.json(updatedStation);
     }
     catch (error) {
-        console.error('❌ Error updating station:', error);
-        res.status(500).json({ error: 'Failed to update station' });
+        (0, express_2.handleError)(res, error, 'Failed to update station');
     }
 });
 router.get('/:id', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
             return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
-            res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
             return;
         }
         res.json(station);
     }
     catch (error) {
-        console.error('❌ Error fetching station:', error);
-        res.status(500).json({ error: 'Failed to fetch station' });
+        (0, express_2.handleError)(res, error, 'Failed to fetch station');
     }
 });
 router.post('/', async (req, res) => {
@@ -243,11 +271,13 @@ router.post('/', async (req, res) => {
             });
             if (existing) {
                 console.log(`⚠️ Duplicate station detected: "${stationData.name}" already exists as ID ${existing.id}`);
-                return res.status(409).json({
+                const data = {
                     error: 'Station already exists',
                     duplicate: true,
                     existingStation: existing
-                });
+                };
+                res.status(409).json(data);
+                return;
             }
         }
         const optimalId = await getNextAvailableStationId();
@@ -271,48 +301,47 @@ router.post('/', async (req, res) => {
                 return;
             }
             catch (fallbackError) {
-                console.error('❌ Fallback creation also failed:', fallbackError);
-                res.status(500).json({ error: 'Failed to create station' });
+                (0, express_2.handleError)(res, fallbackError, 'Failed to create station');
                 return;
             }
         }
-        res.status(500).json({ error: 'Failed to create station' });
+        (0, express_2.handleError)(res, error, 'Failed to create station');
     }
 });
 router.delete('/:id', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
             return;
         }
         const existingStation = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true }
         });
         if (!existingStation) {
-            res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
             return;
         }
         await prisma.station.delete({
             where: { id: existingStation.id }
         });
-        res.json({ success: true });
+        const data = { success: true };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error deleting station:', error);
-        res.status(500).json({ error: 'Failed to delete station' });
+        (0, express_2.handleError)(res, error, 'Failed to delete station');
     }
 });
 router.post('/:id/calculate-quality', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
         if (idType === 'invalid') {
-            res.status(400).json({ error: 'Invalid station ID format' });
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
             return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam);
         if (!station) {
-            res.status(404).json({ error: 'Station not found' });
+            (0, express_2.handleNotFound)(res, 'Station');
             return;
         }
         const { getStationFeedback } = require('../utils/station-lookup');
@@ -355,7 +384,7 @@ router.post('/:id/calculate-quality', async (req, res) => {
             }
         });
         console.log(`✅ Quality score calculated for station ${station.id}: ${qualityScore.toFixed(2)}%`);
-        res.json({
+        const data = {
             qualityScore,
             feedbackCount: totalFeedback,
             breakdown: {
@@ -365,11 +394,108 @@ router.post('/:id/calculate-quality', async (req, res) => {
                 userSatisfaction: breakdown.userSatisfaction / 0.15,
                 metadataRichness: breakdown.metadataRichness / 0.1
             }
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('❌ Error calculating quality score:', error);
-        res.status(500).json({ error: 'Failed to calculate quality score' });
+        (0, express_2.handleError)(res, error, 'Failed to calculate quality score');
+    }
+});
+router.get('/:id/recently-played', async (req, res) => {
+    try {
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        if (idType === 'invalid') {
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
+        }
+        const limit = parseInt(req.query.limit) || 50;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let whereClause = {
+            playedAt: { gte: today }
+        };
+        if (idType === 'nanoid') {
+            whereClause.stationNanoid = stationIdParam;
+        }
+        else {
+            whereClause.stationId = parseInt(stationIdParam);
+        }
+        const tracks = await prisma.stationPlayHistory.findMany({
+            where: whereClause,
+            include: {
+                track: true
+            },
+            orderBy: { playedAt: 'desc' },
+            take: limit
+        });
+        const formattedTracks = tracks.map(play => ({
+            id: play.id,
+            playedAt: play.playedAt,
+            source: play.source,
+            showName: play.showName,
+            djName: play.djName,
+            track: {
+                id: play.track.id,
+                title: play.track.title,
+                artist: play.track.artist,
+                album: play.track.album,
+                artwork: play.track.artwork,
+                duration: play.track.duration
+            }
+        }));
+        res.json(formattedTracks);
+    }
+    catch (error) {
+        (0, express_2.handleError)(res, error, 'Failed to get recently played tracks');
+    }
+});
+router.get('/:id/history/:date', async (req, res) => {
+    try {
+        const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)(req);
+        const { date } = req.params;
+        if (idType === 'invalid') {
+            (0, express_2.handleValidationError)(res, 'Invalid station ID format');
+            return;
+        }
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(date)) {
+            (0, express_2.handleValidationError)(res, 'Invalid date format. Use YYYY-MM-DD');
+            return;
+        }
+        const requestedDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (requestedDate.getTime() === today.getTime()) {
+            const data = {
+                error: 'Use /recently-played endpoint for today\'s tracks',
+                redirect: `/stations/${stationIdParam}/recently-played`
+            };
+            res.status(400).json(data);
+            return;
+        }
+        const metadataServerUrl = process.env.METADATA_SERVER_URL || 'https://streemr.ddns.net:3002';
+        const exportUrl = `${metadataServerUrl}/exports/${date}.json`;
+        try {
+            const fetch = (await Promise.resolve().then(() => __importStar(require('node-fetch')))).default;
+            const response = await fetch(exportUrl);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    (0, express_2.handleNotFound)(res, 'Track data for this date');
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const exportData = await response.json();
+            const stationTracks = exportData.stations[stationIdParam] || [];
+            res.json(stationTracks);
+        }
+        catch (fetchError) {
+            console.error(`❌ Error fetching historical data for ${date}:`, fetchError);
+            res.status(503).json({ error: 'Historical data service unavailable' });
+        }
+    }
+    catch (error) {
+        (0, express_2.handleError)(res, error, 'Failed to get historical tracks');
     }
 });
 exports.default = router;
