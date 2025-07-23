@@ -46,8 +46,20 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     const skip = (page - 1) * limit;
 
     // Filter by active status (default: only active stations)
-    const showInactive = req.query.includeInactive === 'true';
-    const whereClause = showInactive ? {} : { isActive: true };
+    const statusFilter = req.query.statusFilter as string || 'active';
+    let whereClause = {};
+    
+    if (statusFilter === 'active') {
+      whereClause = { isActive: true };
+    } else if (statusFilter === 'inactive') {
+      whereClause = { isActive: false };
+    } else if (statusFilter === 'all') {
+      whereClause = {}; // No filter - show all
+    } else {
+      // Fallback: also support legacy includeInactive parameter
+      const showInactive = req.query.includeInactive === 'true';
+      whereClause = showInactive ? {} : { isActive: true };
+    }
 
     const [stations, total] = await Promise.all([
       prisma.station.findMany({
@@ -95,8 +107,20 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
     console.log(`🔍 Searching stations for: "${searchTerm}"`);
 
     // Filter by active status for search too
-    const showInactive = req.query.includeInactive === 'true';
-    const activeFilter = showInactive ? {} : { isActive: true };
+    const statusFilter = req.query.statusFilter as string || 'active';
+    let activeFilter = {};
+    
+    if (statusFilter === 'active') {
+      activeFilter = { isActive: true };
+    } else if (statusFilter === 'inactive') {
+      activeFilter = { isActive: false };
+    } else if (statusFilter === 'all') {
+      activeFilter = {}; // No filter - show all
+    } else {
+      // Fallback: also support legacy includeInactive parameter
+      const showInactive = req.query.includeInactive === 'true';
+      activeFilter = showInactive ? {} : { isActive: true };
+    }
 
     const stations = await prisma.station.findMany({
       where: {
@@ -495,7 +519,7 @@ router.get('/:id/recently-played', async (req: Request, res: Response): Promise<
     const tracks = await prisma.stationPlayHistory.findMany({
       where: whereClause,
       include: {
-        track: true
+        Track: true
       },
       orderBy: { playedAt: 'desc' },
       take: limit
@@ -508,12 +532,12 @@ router.get('/:id/recently-played', async (req: Request, res: Response): Promise<
       showName: play.showName,
       djName: play.djName,
       track: {
-        id: play.track.id,
-        title: play.track.title,
-        artist: play.track.artist,
-        album: play.track.album,
-        artwork: play.track.artwork,
-        duration: play.track.duration
+        id: play.Track.id,
+        title: play.Track.title,
+        artist: play.Track.artist,
+        album: play.Track.album,
+        artwork: play.Track.artwork,
+        duration: play.Track.duration
       }
     }));
 
@@ -523,65 +547,9 @@ router.get('/:id/recently-played', async (req: Request, res: Response): Promise<
   }
 });
 
-// Get historical tracks from JSON exports (for dates older than today)
-router.get('/:id/history/:date', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { stationIdParam, idType } = parseStationIdParam(req);
-    const { date } = req.params;
-    
-    if (idType === 'invalid') {
-      handleValidationError(res, 'Invalid station ID format');
-      return;
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      handleValidationError(res, 'Invalid date format. Use YYYY-MM-DD');
-      return;
-    }
-
-    // Check if it's today's date (should use recently-played endpoint instead)
-    const requestedDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (requestedDate.getTime() === today.getTime()) {
-      const data = { 
-        error: 'Use /recently-played endpoint for today\'s tracks',
-        redirect: `/stations/${stationIdParam}/recently-played`
-      };
-      res.status(400).json(data);
-      return;
-    }
-
-    // Fetch from metadata server JSON exports
-    const metadataServerUrl = process.env.METADATA_SERVER_URL || 'https://streemr.ddns.net:3002';
-    const exportUrl = `${metadataServerUrl}/exports/${date}.json`;
-    
-    try {
-      const fetch = (await import('node-fetch')).default;
-      const response = await fetch(exportUrl);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          handleNotFound(res, 'Track data for this date');
-          return;
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const exportData = await response.json();
-      const stationTracks = exportData.stations[stationIdParam] || [];
-      
-      res.json(stationTracks);
-    } catch (fetchError) {
-      console.error(`❌ Error fetching historical data for ${date}:`, fetchError);
-      res.status(503).json({ error: 'Historical data service unavailable' });
-    }
-  } catch (error) {
-    handleError(res, error, 'Failed to get historical tracks');
-  }
-});
+// Historical track feature disabled - only today's tracks supported
+// router.get('/:id/history/:date', async (req: Request, res: Response): Promise<void> => {
+//   res.status(404).json({ error: 'Historical track data not supported' });
+// });
 
 export default router;

@@ -19,12 +19,15 @@ import imageProxyRoutes from './routes/image-proxy.js';
 import memoryRoutes from './routes/memory.js';
 import feedbackRoutes from './routes/feedback.js';
 import tracksRoutes from './routes/tracks.js';
+import musicLinksRoutes from './routes/music-links.js';
 import { memoryMonitor } from './middleware/memoryMonitor.js';
 import path from 'path';
 
 
 const app = express();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+});
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -55,6 +58,7 @@ app.use('/image-proxy', imageProxyRoutes);
 app.use('/memory', memoryRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/tracks', tracksRoutes);
+app.use('/api/music-links', musicLinksRoutes);
 
 // Admin routes for static HTML pages
 app.get('/admin/stations', (req: Request, res: Response) => {
@@ -165,9 +169,27 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Radio backend is working!");
 });
 
-// Error handling for unhandled promise rejections
+// Graceful shutdown handler
+const gracefulShutdown = async () => {
+  console.log('🔄 Received shutdown signal, closing connections...');
+  try {
+    await prisma.$disconnect();
+    console.log('✅ Prisma connection closed successfully');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+
+// Error handling for unhandled promise rejections  
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // In Express 5, we should handle these more gracefully
 });
 
 process.on('uncaughtException', (error) => {
@@ -177,9 +199,9 @@ process.on('uncaughtException', (error) => {
     console.log('🔧 EPIPE error caught and handled - continuing server operation');
     return;
   }
-  // For other critical errors, still exit
-  console.error('💥 Critical error - shutting down server');
-  process.exit(1);
+  // For other critical errors, still exit gracefully
+  console.error('💥 Critical error - shutting down server gracefully');
+  gracefulShutdown();
 });
 
 // Register cleanup callback for emergency memory situations

@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { findStationByEitherId, parseStationIdParam, toggleUserFavorite, findUserFavoriteByStationId } from '../utils/station-lookup';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -17,13 +18,14 @@ interface AuthenticatedRequest extends Request {
 }
 
 // Authentication middleware
-const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: Function) => {
+const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: Function): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      return res.status(401).json({ error: 'Access token required' });
+      res.status(401).json({ error: 'Access token required' });
+      return;
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
@@ -35,19 +37,21 @@ const authenticateToken = async (req: AuthenticatedRequest, res: Response, next:
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid token - user not found' });
+      res.status(401).json({ error: 'Invalid token - user not found' });
+      return;
     }
 
     req.user = { userId: decoded.userId };
     next();
   } catch (error) {
     console.error('Authentication error:', error);
-    return res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: 'Invalid token' });
+    return;
   }
 };
 
 // GET /api/favorites - Get all favorites for the authenticated user
-router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
 
@@ -138,26 +142,27 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     // Filter out favorites where station no longer exists
     const validFavorites = favoritesWithStations.filter(fav => fav.station !== null);
 
-    res.json({
+    const data = {
       favorites: validFavorites,
       count: validFavorites.length
-    });
+    };
+    res.json(data);
 
   } catch (error) {
-    console.error('Error fetching favorites:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Failed to fetch favorites');
   }
 });
 
 // POST /api/favorites - Add a station to user's favorites (supports both numeric and nanoid)
-router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
     const { stationId } = req.body;
 
     // Validate input - accept both string (nanoid) and number (legacy)
     if (!stationId) {
-      return res.status(400).json({ error: 'stationId is required' });
+      handleValidationError(res, 'stationId is required');
+      return;
     }
 
     const stationIdParam = stationId.toString();
@@ -175,20 +180,22 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
     });
 
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      handleNotFound(res, 'Station');
+      return;
     }
 
     // Check if already in favorites using dual lookup
     const existingFavorite = await findUserFavoriteByStationId(userId, stationIdParam);
 
     if (existingFavorite) {
-      return res.status(409).json({ error: 'Station already in favorites' });
+      res.status(409).json({ error: 'Station already in favorites' });
+      return;
     }
 
     // Add to favorites using dual reference utility
     const favorite = await toggleUserFavorite(userId, stationIdParam, 'add');
 
-    res.status(201).json({
+    const data = {
       message: 'Station added to favorites',
       favorite: {
         id: favorite.id,
@@ -197,16 +204,16 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
         createdAt: favorite.createdAt,
         station: station
       }
-    });
+    };
+    res.status(201).json(data);
 
   } catch (error) {
-    console.error('Error adding favorite:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Failed to add favorite');
   }
 });
 
 // DELETE /api/favorites/:stationId - Remove a station from user's favorites (supports both numeric and nanoid)
-router.delete('/:stationId', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:stationId', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
     const stationIdParam = req.params.stationId;
@@ -214,24 +221,26 @@ router.delete('/:stationId', authenticateToken, async (req: AuthenticatedRequest
     // Validate stationId format
     const { idType } = parseStationIdParam({ params: { id: stationIdParam } });
     if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid stationId format' });
+      handleValidationError(res, 'Invalid stationId format');
+      return;
     }
 
     // Check if favorite exists using dual lookup
     const existingFavorite = await findUserFavoriteByStationId(userId, stationIdParam);
 
     if (!existingFavorite) {
-      return res.status(404).json({ error: 'Favorite not found' });
+      handleNotFound(res, 'Favorite');
+      return;
     }
 
     // Remove from favorites using dual reference utility
     await toggleUserFavorite(userId, stationIdParam, 'remove');
 
-    res.json({ message: 'Station removed from favorites' });
+    const data = { message: 'Station removed from favorites' };
+    res.json(data);
 
   } catch (error) {
-    console.error('Error removing favorite:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Failed to remove favorite');
   }
 });
 

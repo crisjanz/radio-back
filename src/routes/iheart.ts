@@ -37,12 +37,13 @@ async function getNextAvailableStationId(): Promise<number> {
 }
 
 // Search iHeart stations
-router.get('/search', async (req: Request, res: Response) => {
+router.get('/search', async (req: Request, res: Response): Promise<void> => {
   try {
     const { location, keyword, limit = 50 } = req.query;
     
     if (!location && !keyword) {
-      return res.status(400).json({ error: 'Location or keyword parameter is required' });
+      res.status(400).json({ error: 'Location or keyword parameter is required' });
+      return;
     }
 
     const searchTerm = (location || keyword) as string;
@@ -53,7 +54,8 @@ router.get('/search', async (req: Request, res: Response) => {
     const results = await iheart.search(searchTerm, { limit: 100 });
     
     if (!results || !results.stations) {
-      return res.json({ stations: [], total: 0 });
+      res.json({ stations: [], total: 0 });
+      return;
     }
 
     // Limit results
@@ -92,12 +94,13 @@ router.get('/search', async (req: Request, res: Response) => {
 });
 
 // Import selected iHeart stations
-router.post('/import', async (req: Request, res: Response) => {
+router.post('/import', async (req: Request, res: Response): Promise<void> => {
   try {
     const { stations } = req.body;
     
     if (!Array.isArray(stations) || stations.length === 0) {
-      return res.status(400).json({ error: 'Stations array is required' });
+      res.status(400).json({ error: 'Stations array is required' });
+      return;
     }
 
     console.log(`📥 Importing ${stations.length} iHeart stations`);

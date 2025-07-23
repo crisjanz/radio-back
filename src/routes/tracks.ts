@@ -34,7 +34,7 @@ router.get('/stations/:id/recent-tracks', async (req: any, res: any) => {
     const tracks = await prisma.stationPlayHistory.findMany({
       where: whereClause,
       include: {
-        track: true
+        Track: true
       },
       orderBy: { playedAt: 'desc' },
       take: limit
@@ -47,12 +47,12 @@ router.get('/stations/:id/recent-tracks', async (req: any, res: any) => {
       showName: play.showName,
       djName: play.djName,
       track: {
-        id: play.track.id,
-        title: play.track.title,
-        artist: play.track.artist,
-        album: play.track.album,
-        artwork: play.track.artwork,
-        duration: play.track.duration
+        id: play.Track.id,
+        title: play.Track.title,
+        artist: play.Track.artist,
+        album: play.Track.album,
+        artwork: play.Track.artwork,
+        duration: play.Track.duration
       }
     }));
 
@@ -64,104 +64,15 @@ router.get('/stations/:id/recent-tracks', async (req: any, res: any) => {
   }
 });
 
-// Get available past days for a station (for navigation)
-router.get('/stations/:id/available-days', async (req: any, res: any) => {
-  try {
-    const { stationIdParam, idType } = parseStationIdParam(req);
-    
-    if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
-    }
+// Historical track feature disabled - only today's tracks supported
+// router.get('/stations/:id/available-days', async (req: any, res: any) => {
+//   res.json([]); // Return empty array - no historical data available
+// });
 
-    // Fetch available dates from metadata server
-    const metadataServerUrl = process.env.METADATA_SERVER_URL || 'https://streemr.ddns.net:3002';
-    const exportsUrl = `${metadataServerUrl}/exports`;
-    
-    try {
-      const fetch = (await import('node-fetch')).default;
-      const response = await fetch(exportsUrl);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      const dates = data.exports
-        .filter((filename: string) => filename.endsWith('.json'))
-        .map((filename: string) => filename.replace('.json', ''))
-        .sort()
-        .reverse(); // Most recent first
-      
-      res.json(dates);
-    } catch (fetchError) {
-      console.error('❌ Error fetching available dates:', fetchError);
-      res.json([]); // Return empty array if service unavailable
-    }
-
-  } catch (error) {
-    console.error(`Error getting available days for station ${req.params.id}:`, error);
-    res.status(500).json({ error: 'Failed to get available days' });
-  }
-});
-
-// Get tracks for a specific past day (will load from JSON files via metadata server)
-router.get('/stations/:id/tracks/:date', async (req: any, res: any) => {
-  const { date } = req.params;
-  
-  try {
-    const { stationIdParam, idType } = parseStationIdParam(req);
-    
-    if (idType === 'invalid') {
-      return res.status(400).json({ error: 'Invalid station ID format' });
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
-    }
-
-    // Check if it's today's date (should use recent-tracks endpoint instead)
-    const requestedDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (requestedDate.getTime() === today.getTime()) {
-      return res.status(400).json({ 
-        error: 'Use /recent-tracks endpoint for today\'s tracks',
-        redirect: `/tracks/stations/${stationIdParam}/recent-tracks`
-      });
-    }
-
-    // Fetch from metadata server JSON exports
-    const metadataServerUrl = process.env.METADATA_SERVER_URL || 'https://streemr.ddns.net:3002';
-    const exportUrl = `${metadataServerUrl}/exports/${date}.json`;
-    
-    try {
-      const fetch = (await import('node-fetch')).default;
-      const response = await fetch(exportUrl);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          return res.status(404).json({ error: 'No track data available for this date' });
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const exportData = await response.json();
-      const stationTracks = exportData.stations[stationIdParam] || [];
-      
-      res.json(stationTracks);
-    } catch (fetchError) {
-      console.error(`❌ Error fetching historical data for ${date}:`, fetchError);
-      res.status(503).json({ error: 'Historical data service unavailable' });
-    }
-
-  } catch (error) {
-    console.error(`Error getting tracks for station ${req.params.id} on ${date}:`, error);
-    res.status(500).json({ error: 'Failed to get tracks for date' });
-  }
-});
+// Historical track feature disabled - only today's tracks supported
+// router.get('/stations/:id/tracks/:date', async (req: any, res: any) => {
+//   res.status(404).json({ error: 'Historical track data not supported' });
+// });
 
 // Get track collection statistics
 router.get('/stats', async (req: any, res: any) => {

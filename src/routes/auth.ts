@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
+import { handleError, handleNotFound, handleValidationError } from '../types/express';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -28,17 +29,19 @@ const generateToken = (userId: number) => {
 };
 
 // Signup endpoint
-router.post('/signup', async (req: Request, res: Response) => {
+router.post('/signup', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      handleValidationError(res, 'Email and password are required');
+      return;
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      handleValidationError(res, 'Password must be at least 6 characters');
+      return;
     }
 
     // Check if user already exists
@@ -47,7 +50,8 @@ router.post('/signup', async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'User already exists with this email' });
+      handleValidationError(res, 'User already exists with this email');
+      return;
     }
 
     // Hash password
@@ -69,26 +73,27 @@ router.post('/signup', async (req: Request, res: Response) => {
     // Generate token
     const token = generateToken(user.id);
 
-    res.status(201).json({
+    const data = {
       message: 'User created successfully',
       user,
       token
-    });
+    };
+    res.status(201).json(data);
 
   } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Signup failed');
   }
 });
 
 // Login endpoint
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      handleValidationError(res, 'Email and password are required');
+      return;
     }
 
     // Find user
@@ -97,20 +102,22 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      res.status(401).json({ error: 'Invalid email or password' });
+      return;
     }
 
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      res.status(401).json({ error: 'Invalid email or password' });
+      return;
     }
 
     // Generate token
     const token = generateToken(user.id);
 
-    res.json({
+    const data = {
       message: 'Login successful',
       user: {
         id: user.id,
@@ -118,21 +125,22 @@ router.post('/login', async (req: Request, res: Response) => {
         createdAt: user.createdAt,
       },
       token
-    });
+    };
+    res.json(data);
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Login failed');
   }
 });
 
 // Password reset request
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+      handleValidationError(res, 'Email is required');
+      return;
     }
 
     // Find user
@@ -142,7 +150,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     if (!user) {
       // Don't reveal if email exists or not
-      return res.json({ message: 'If the email exists, a reset link has been sent' });
+      const data = { message: 'If the email exists, a reset link has been sent' };
+      res.json(data);
+      return;
     }
 
     // Generate reset token
@@ -177,25 +187,27 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({ message: 'If the email exists, a reset link has been sent' });
+    const data = { message: 'If the email exists, a reset link has been sent' };
+    res.json(data);
 
   } catch (error) {
-    console.error('Password reset error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Password reset failed');
   }
 });
 
 // Confirm password reset
-router.post('/reset-password/confirm', async (req: Request, res: Response) => {
+router.post('/reset-password/confirm', async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, password } = req.body;
 
     if (!token || !password) {
-      return res.status(400).json({ error: 'Token and password are required' });
+      handleValidationError(res, 'Token and password are required');
+      return;
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      handleValidationError(res, 'Password must be at least 6 characters');
+      return;
     }
 
     // Find user with valid reset token
@@ -209,7 +221,8 @@ router.post('/reset-password/confirm', async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(400).json({ error: 'Invalid or expired reset token' });
+      handleValidationError(res, 'Invalid or expired reset token');
+      return;
     }
 
     // Hash new password
@@ -225,21 +238,22 @@ router.post('/reset-password/confirm', async (req: Request, res: Response) => {
       }
     });
 
-    res.json({ message: 'Password reset successful' });
+    const data = { message: 'Password reset successful' };
+    res.json(data);
 
   } catch (error) {
-    console.error('Password reset confirm error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    handleError(res, error, 'Password reset confirmation failed');
   }
 });
 
 // Verify token endpoint (for checking if user is logged in)
-router.get('/verify', async (req: Request, res: Response) => {
+router.get('/verify', async (req: Request, res: Response): Promise<void> => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+      res.status(401).json({ error: 'No token provided' });
+      return;
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
@@ -253,10 +267,12 @@ router.get('/verify', async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid token' });
+      res.status(401).json({ error: 'Invalid token' });
+      return;
     }
 
-    res.json({ user });
+    const data = { user };
+    res.json(data);
 
   } catch (error) {
     console.error('Token verification error:', error);

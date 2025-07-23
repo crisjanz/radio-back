@@ -96,6 +96,26 @@ function loadCurrentMetadataConfig(station) {
         document.getElementById('metadata-field-mapping').value = '';
     }
     
+    // Load ad filter patterns
+    if (station.adFilterPatterns) {
+        try {
+            const patterns = typeof station.adFilterPatterns === 'string' 
+                ? JSON.parse(station.adFilterPatterns) 
+                : station.adFilterPatterns;
+            
+            if (Array.isArray(patterns)) {
+                document.getElementById('metadata-ad-filter').value = patterns.join('\n');
+            } else {
+                document.getElementById('metadata-ad-filter').value = station.adFilterPatterns;
+            }
+        } catch (error) {
+            // Treat as plain text if not valid JSON
+            document.getElementById('metadata-ad-filter').value = station.adFilterPatterns || '';
+        }
+    } else {
+        document.getElementById('metadata-ad-filter').value = '';
+    }
+    
     // Add event listener for metadata type changes
     const metadataTypeSelect = document.getElementById('metadata-api-type');
     if (metadataTypeSelect && !metadataTypeSelect.hasAttribute('data-listener-added')) {
@@ -384,6 +404,7 @@ function resetMetadataApiConfig() {
         document.getElementById('metadata-api-type').value = '';
         document.getElementById('metadata-response-format').value = '';
         document.getElementById('metadata-field-mapping').value = '';
+        document.getElementById('metadata-ad-filter').value = '';
         
         // Hide test results
         document.getElementById('metadata-api-test-results').classList.add('hidden');
@@ -393,12 +414,27 @@ function resetMetadataApiConfig() {
 
 // Save and close the metadata API editor
 function saveAndCloseMetadataApiEditor() {
+    // Collect ad filter patterns
+    const adFilterText = document.getElementById('metadata-ad-filter').value.trim();
+    let adFilterPatterns = null;
+    if (adFilterText) {
+        // Convert newline-separated text to JSON array
+        const patterns = adFilterText.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+        
+        if (patterns.length > 0) {
+            adFilterPatterns = JSON.stringify(patterns);
+        }
+    }
+    
     // Collect metadata configuration
     const metadataConfig = {
         metadataApiUrl: document.getElementById('metadata-api-url').value.trim() || null,
         metadataApiType: document.getElementById('metadata-api-type').value.trim() || null,
         metadataFormat: document.getElementById('metadata-response-format').value.trim() || null,
-        metadataFields: document.getElementById('metadata-field-mapping').value.trim() || null
+        metadataFields: document.getElementById('metadata-field-mapping').value.trim() || null,
+        adFilterPatterns: adFilterPatterns
     };
     
     // Update the current station if we're editing from station editor

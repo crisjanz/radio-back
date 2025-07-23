@@ -94,10 +94,11 @@ class MemoryMonitor {
             }
             if (req.path.includes('/metadata') && usage.heapUsed > this.EMERGENCY_THRESHOLD) {
                 console.log('🚫 Blocking metadata request due to critical memory usage');
-                return res.status(503).json({
+                res.status(503).json({
                     error: 'Service temporarily unavailable due to high memory usage',
                     retryAfter: 60
                 });
+                return;
             }
             next();
         };

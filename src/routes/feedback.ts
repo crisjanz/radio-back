@@ -64,14 +64,16 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
     ];
 
     if (!validTypes.includes(feedbackType)) {
-      return res.status(400).json({ error: 'Invalid feedback type' });
+      res.status(400).json({ error: 'Invalid feedback type' });
+      return;
     }
 
     // Check if station exists using dual lookup
     const station = await findStationByEitherId(stationId);
 
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      res.status(404).json({ error: 'Station not found' });
+      return;
     }
 
     // For anonymous users, apply stricter rate limiting
@@ -91,7 +93,8 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
       // Get station reference fields for database operations
       const stationRefs = await getStationReferenceFields(stationId);
       if (!stationRefs) {
-        return res.status(404).json({ error: 'Station not found' });
+        res.status(404).json({ error: 'Station not found' });
+      return;
       }
 
       const existingFeedback = await prisma.stationFeedback.findFirst({
@@ -107,9 +110,10 @@ router.post('/stations/:stationId', optionalAuth, feedbackLimiter, async (req, r
       });
 
       if (existingFeedback) {
-        return res.status(429).json({ 
+        res.status(429).json({ 
           error: 'You have already submitted this type of feedback for this station recently' 
         });
+        return;
       }
 
       // Create feedback entry using dual reference utility
@@ -152,7 +156,8 @@ router.get('/stations/:stationId/summary', async (req, res) => {
     });
 
     if (!station) {
-      return res.status(404).json({ error: 'Station not found' });
+      res.status(404).json({ error: 'Station not found' });
+      return;
     }
 
     // Get feedback using dual reference lookup
@@ -237,7 +242,8 @@ router.get('/user/history', async (req, res) => {
     const userId = (req as any).user?.id;
     
     if (!userId) {
-      return res.status(401).json({ error: 'Authentication required' });
+      res.status(401).json({ error: 'Authentication required' });
+      return;
     }
 
     const userFeedback = await prisma.stationFeedback.findMany({

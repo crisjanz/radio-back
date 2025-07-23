@@ -9,6 +9,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const client_1 = require("@prisma/client");
+const express_2 = require("../types/express");
 const router = express_1.default.Router();
 const prisma = new client_1.PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
@@ -28,16 +29,19 @@ router.post('/signup', async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+            (0, express_2.handleValidationError)(res, 'Email and password are required');
+            return;
         }
         if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters' });
+            (0, express_2.handleValidationError)(res, 'Password must be at least 6 characters');
+            return;
         }
         const existingUser = await prisma.user.findUnique({
             where: { email: email.toLowerCase() }
         });
         if (existingUser) {
-            return res.status(400).json({ error: 'User already exists with this email' });
+            (0, express_2.handleValidationError)(res, 'User already exists with this email');
+            return;
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 12);
         const user = await prisma.user.create({
@@ -52,35 +56,38 @@ router.post('/signup', async (req, res) => {
             }
         });
         const token = generateToken(user.id);
-        res.status(201).json({
+        const data = {
             message: 'User created successfully',
             user,
             token
-        });
+        };
+        res.status(201).json(data);
     }
     catch (error) {
-        console.error('Signup error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        (0, express_2.handleError)(res, error, 'Signup failed');
     }
 });
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+            (0, express_2.handleValidationError)(res, 'Email and password are required');
+            return;
         }
         const user = await prisma.user.findUnique({
             where: { email: email.toLowerCase() }
         });
         if (!user) {
-            return res.status(401).json({ error: 'Invalid email or password' });
+            res.status(401).json({ error: 'Invalid email or password' });
+            return;
         }
         const isPasswordValid = await bcryptjs_1.default.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid email or password' });
+            res.status(401).json({ error: 'Invalid email or password' });
+            return;
         }
         const token = generateToken(user.id);
-        res.json({
+        const data = {
             message: 'Login successful',
             user: {
                 id: user.id,
@@ -88,24 +95,27 @@ router.post('/login', async (req, res) => {
                 createdAt: user.createdAt,
             },
             token
-        });
+        };
+        res.json(data);
     }
     catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        (0, express_2.handleError)(res, error, 'Login failed');
     }
 });
 router.post('/reset-password', async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) {
-            return res.status(400).json({ error: 'Email is required' });
+            (0, express_2.handleValidationError)(res, 'Email is required');
+            return;
         }
         const user = await prisma.user.findUnique({
             where: { email: email.toLowerCase() }
         });
         if (!user) {
-            return res.json({ message: 'If the email exists, a reset link has been sent' });
+            const data = { message: 'If the email exists, a reset link has been sent' };
+            res.json(data);
+            return;
         }
         const resetToken = crypto_1.default.randomBytes(32).toString('hex');
         const resetTokenExpiry = new Date(Date.now() + 3600000);
@@ -132,21 +142,23 @@ router.post('/reset-password', async (req, res) => {
         `
             });
         }
-        res.json({ message: 'If the email exists, a reset link has been sent' });
+        const data = { message: 'If the email exists, a reset link has been sent' };
+        res.json(data);
     }
     catch (error) {
-        console.error('Password reset error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        (0, express_2.handleError)(res, error, 'Password reset failed');
     }
 });
 router.post('/reset-password/confirm', async (req, res) => {
     try {
         const { token, password } = req.body;
         if (!token || !password) {
-            return res.status(400).json({ error: 'Token and password are required' });
+            (0, express_2.handleValidationError)(res, 'Token and password are required');
+            return;
         }
         if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters' });
+            (0, express_2.handleValidationError)(res, 'Password must be at least 6 characters');
+            return;
         }
         const user = await prisma.user.findFirst({
             where: {
@@ -157,7 +169,8 @@ router.post('/reset-password/confirm', async (req, res) => {
             }
         });
         if (!user) {
-            return res.status(400).json({ error: 'Invalid or expired reset token' });
+            (0, express_2.handleValidationError)(res, 'Invalid or expired reset token');
+            return;
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 12);
         await prisma.user.update({
@@ -168,18 +181,19 @@ router.post('/reset-password/confirm', async (req, res) => {
                 resetTokenExpiry: null,
             }
         });
-        res.json({ message: 'Password reset successful' });
+        const data = { message: 'Password reset successful' };
+        res.json(data);
     }
     catch (error) {
-        console.error('Password reset confirm error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        (0, express_2.handleError)(res, error, 'Password reset confirmation failed');
     }
 });
 router.get('/verify', async (req, res) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
         if (!token) {
-            return res.status(401).json({ error: 'No token provided' });
+            res.status(401).json({ error: 'No token provided' });
+            return;
         }
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         const user = await prisma.user.findUnique({
@@ -191,9 +205,11 @@ router.get('/verify', async (req, res) => {
             }
         });
         if (!user) {
-            return res.status(401).json({ error: 'Invalid token' });
+            res.status(401).json({ error: 'Invalid token' });
+            return;
         }
-        res.json({ user });
+        const data = { user };
+        res.json(data);
     }
     catch (error) {
         console.error('Token verification error:', error);

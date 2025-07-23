@@ -9,12 +9,13 @@ const imageCache = new Map<string, { buffer: Buffer; contentType: string; timest
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 // Image proxy route
-router.get('/proxy', async (req: Request, res: Response) => {
+router.get('/proxy', async (req: Request, res: Response): Promise<void> => {
   try {
     const { url, w, h, q } = req.query;
     
     if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'URL parameter is required' });
+      res.status(400).json({ error: 'URL parameter is required' });
+      return;
     }
 
     // Validate URL
@@ -22,12 +23,14 @@ router.get('/proxy', async (req: Request, res: Response) => {
     try {
       parsedUrl = new URL(url);
     } catch {
-      return res.status(400).json({ error: 'Invalid URL' });
+      res.status(400).json({ error: 'Invalid URL' });
+      return;
     }
 
     // Security: Only allow HTTP/HTTPS
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      return res.status(400).json({ error: 'Only HTTP/HTTPS URLs allowed' });
+      res.status(400).json({ error: 'Only HTTP/HTTPS URLs allowed' });
+      return;
     }
 
     // Security: Block internal networks (prevent SSRF)
@@ -38,7 +41,8 @@ router.get('/proxy', async (req: Request, res: Response) => {
         hostname.startsWith('172.') ||
         hostname.startsWith('192.168.') ||
         hostname === '0.0.0.0') {
-      return res.status(400).json({ error: 'Internal URLs not allowed' });
+      res.status(400).json({ error: 'Internal URLs not allowed' });
+      return;
     }
 
     // Skip proxy for Supabase URLs (already optimized)
@@ -53,7 +57,8 @@ router.get('/proxy', async (req: Request, res: Response) => {
     if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
       res.set('Content-Type', cached.contentType);
       res.set('Cache-Control', 'public, max-age=86400'); // 24 hours
-      return res.send(cached.buffer);
+      res.send(cached.buffer);
+      return;
     }
 
 
@@ -66,20 +71,23 @@ router.get('/proxy', async (req: Request, res: Response) => {
     });
 
     if (!response.ok) {
-      return res.status(404).json({ error: 'Image not found' });
+      res.status(404).json({ error: 'Image not found' });
+      return;
     }
 
     // Validate content type before processing
     let contentType = response.headers.get('content-type');
     if (!contentType || !contentType.startsWith('image/')) {
       console.warn(`Invalid content type for image URL ${url}: ${contentType}`);
-      return res.status(400).json({ error: 'URL does not point to an image' });
+      res.status(400).json({ error: 'URL does not point to an image' });
+      return;
     }
 
     // Check content length to prevent huge downloads
     const contentLength = response.headers.get('content-length');
     if (contentLength && parseInt(contentLength) > 2 * 1024 * 1024) { // 2MB limit
-      return res.status(413).json({ error: 'Image too large' });
+      res.status(413).json({ error: 'Image too large' });
+      return;
     }
 
     const buffer = await response.arrayBuffer();
@@ -87,7 +95,8 @@ router.get('/proxy', async (req: Request, res: Response) => {
 
     // Double-check size after download
     if (imageBuffer.length > 2 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Image too large' });
+      res.status(413).json({ error: 'Image too large' });
+      return;
     }
 
     // Optimize image with Sharp if parameters provided

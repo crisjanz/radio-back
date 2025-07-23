@@ -13,17 +13,20 @@ router.get('/proxy', async (req, res) => {
     try {
         const { url, w, h, q } = req.query;
         if (!url || typeof url !== 'string') {
-            return res.status(400).json({ error: 'URL parameter is required' });
+            res.status(400).json({ error: 'URL parameter is required' });
+            return;
         }
         let parsedUrl;
         try {
             parsedUrl = new URL(url);
         }
         catch {
-            return res.status(400).json({ error: 'Invalid URL' });
+            res.status(400).json({ error: 'Invalid URL' });
+            return;
         }
         if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-            return res.status(400).json({ error: 'Only HTTP/HTTPS URLs allowed' });
+            res.status(400).json({ error: 'Only HTTP/HTTPS URLs allowed' });
+            return;
         }
         const hostname = parsedUrl.hostname.toLowerCase();
         if (hostname === 'localhost' ||
@@ -32,7 +35,8 @@ router.get('/proxy', async (req, res) => {
             hostname.startsWith('172.') ||
             hostname.startsWith('192.168.') ||
             hostname === '0.0.0.0') {
-            return res.status(400).json({ error: 'Internal URLs not allowed' });
+            res.status(400).json({ error: 'Internal URLs not allowed' });
+            return;
         }
         if (url.includes('supabase.co')) {
             return res.redirect(url);
@@ -42,7 +46,8 @@ router.get('/proxy', async (req, res) => {
         if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
             res.set('Content-Type', cached.contentType);
             res.set('Cache-Control', 'public, max-age=86400');
-            return res.send(cached.buffer);
+            res.send(cached.buffer);
+            return;
         }
         const response = await (0, node_fetch_1.default)(url, {
             headers: {
@@ -51,21 +56,25 @@ router.get('/proxy', async (req, res) => {
             timeout: 10000,
         });
         if (!response.ok) {
-            return res.status(404).json({ error: 'Image not found' });
+            res.status(404).json({ error: 'Image not found' });
+            return;
         }
         let contentType = response.headers.get('content-type');
         if (!contentType || !contentType.startsWith('image/')) {
             console.warn(`Invalid content type for image URL ${url}: ${contentType}`);
-            return res.status(400).json({ error: 'URL does not point to an image' });
+            res.status(400).json({ error: 'URL does not point to an image' });
+            return;
         }
         const contentLength = response.headers.get('content-length');
         if (contentLength && parseInt(contentLength) > 2 * 1024 * 1024) {
-            return res.status(413).json({ error: 'Image too large' });
+            res.status(413).json({ error: 'Image too large' });
+            return;
         }
         const buffer = await response.arrayBuffer();
         let imageBuffer = Buffer.from(buffer);
         if (imageBuffer.length > 2 * 1024 * 1024) {
-            return res.status(413).json({ error: 'Image too large' });
+            res.status(413).json({ error: 'Image too large' });
+            return;
         }
         const width = w ? parseInt(w) : undefined;
         const height = h ? parseInt(h) : undefined;

@@ -7,164 +7,136 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Station {
+  id                  Int       @id @default(autoincrement())
+  nanoid              String?   @unique @db.VarChar(8)
+  name                String
+  country             String
+  genre               String?
+  subgenre            String?
+  type                String?
+  streamUrl           String
+  favicon             String?
+  logo                String?
+  local_image_url     String?
+  homepage            String?
+  latitude            Float?
+  longitude           Float?
+  city                String?
+  state               String?
+  metadataApiUrl      String?
+  metadataApiType     String?
+  metadataFormat      String?
+  metadataFields      String?
+  adFilterPatterns    String?
+  description         String?
+  language            String?
+  frequency           String?
+  establishedYear     Int?
+  owner               String?
+  bitrate             Int?
+  codec               String?
+  facebookUrl         String?
+  twitterUrl          String?
+  instagramUrl        String?
+  youtubeUrl          String?
+  email               String?
+  phone               String?
+  address             String?
+  schedule            String?
+  programs            String?
+  tags                String?
+  timezone            String?
+  clickcount          Int?
+  votes               Int?
+  radioBrowserUuid    String?
+  isActive            Boolean   @default(true)
+  lastPingCheck       DateTime?
+  lastPingSuccess     Boolean?
+  consecutiveFailures Int       @default(0)
+  userReports         Int       @default(0)
+  adminNotes          String?
+  qualityScore        Float?
+  feedbackCount       Int       @default(0)
+  editorsPick         Boolean   @default(false)
+  featured            Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now())
+}
+
+model StationFeedback {
+  id            Int      @id @default(autoincrement())
+  stationId     Int
+  stationNanoid String?  @db.VarChar(8)
+  userId        Int?
+  feedbackType  String
+  details       String?
+  ipAddress     String?
+  resolved      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+  User          User?    @relation(fields: [userId], references: [id])
+}
+
+model StationPlayHistory {
+  id            String   @id
+  stationId     Int?
+  stationNanoid String?  @db.VarChar(8)
+  trackId       String
+  playedAt      DateTime @default(now())
+  source        String
+  showName      String?
+  djName        String?
+  Track         Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([playedAt])
+  @@index([stationId, playedAt])
+  @@index([stationNanoid, playedAt])
+  @@index([trackId, playedAt])
+}
+
+model Track {
+  id                 String               @id
+  title              String
+  artist             String?
+  album              String?
+  artwork            String?
+  duration           Int?
+  normalizedTitle    String
+  normalizedArtist   String?
+  spotifyId          String?
+  itunesId           String?
+  genre              String?
+  releaseDate        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now())
+  StationPlayHistory StationPlayHistory[]
+
+  @@unique([normalizedTitle, normalizedArtist])
+  @@index([createdAt])
+  @@index([normalizedTitle])
+}
+
 model User {
-  id              Int      @id @default(autoincrement())
-  email           String   @unique
-  password        String   // Hashed password
-  resetToken      String?  // For password recovery
-  resetTokenExpiry DateTime? // When reset token expires
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
-  
-  // Relations
-  favorites       UserFavorites[]
-  feedback        StationFeedback[]
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  password         String
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now())
+  StationFeedback  StationFeedback[]
+  UserFavorites    UserFavorites[]
 }
 
 model UserFavorites {
   id            Int      @id @default(autoincrement())
   userId        Int
-  stationId     Int      // Legacy reference during transition
-  stationNanoid String?  @db.VarChar(8) // New NanoID reference
+  stationId     Int
+  stationNanoid String?  @db.VarChar(8)
   createdAt     DateTime @default(now())
-  
-  // Relations
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Unique constraint to prevent duplicate favorites (keep both for transition)
+  User          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, stationId])
   @@unique([userId, stationNanoid])
-}
-
-model Station {
-  id              Int     @id @default(autoincrement())
-  nanoid          String? @unique @db.VarChar(8) // New NanoID field for transition
-  name            String
-  country         String
-  genre           String?
-  subgenre        String?
-  type            String?
-  streamUrl       String
-  favicon         String?
-  logo            String?
-  local_image_url String? // Our processed/managed image URL (currently Supabase)
-  homepage        String?
-  // Geographic coordinates
-  latitude        Float?
-  longitude       Float?
-  city            String?
-  state           String? // State/Province
-  // Custom metadata API settings
-  metadataApiUrl  String?
-  metadataApiType String? // 'laut.fm', 'radio.co', 'custom', 'icecast', etc.
-  metadataFormat  String? // 'json', 'xml', 'text'
-  metadataFields  String? // JSON string with field mappings
-  // Extended station information
-  description     String?
-  language        String?
-  frequency       String? // e.g. "101.5 FM", "AM 1010"
-  establishedYear Int?
-  owner           String? // Broadcasting company/owner
-  bitrate         Int?
-  codec           String?
-  // Social media links
-  facebookUrl     String?
-  twitterUrl      String?
-  instagramUrl    String?
-  youtubeUrl      String?
-  // Contact information
-  email           String?
-  phone           String?
-  address         String?
-  // Schedule and programming
-  schedule        String? // JSON string with program schedule
-  programs        String? // JSON string with show information
-  // Additional metadata
-  tags            String? // Comma-separated tags
-  timezone        String?
-  // Radio Browser metadata
-  clickcount      Int? // Popularity from Radio Browser
-  votes           Int? // User votes from Radio Browser
-  radioBrowserUuid String? // Radio Browser station UUID for sync
-  // Stream health tracking
-  isActive        Boolean @default(true) // Manual enable/disable
-  lastPingCheck   DateTime? // Last ping attempt  
-  lastPingSuccess Boolean? // Result of last ping
-  consecutiveFailures Int @default(0) // Count of failed pings
-  userReports     Int @default(0) // Count of user "not working" reports
-  adminNotes      String? // Admin comments about stream status
-  // Quality & Curation fields
-  qualityScore    Float? // Calculated quality score (0-100)
-  feedbackCount   Int @default(0) // Number of user feedback reports
-  editorsPick     Boolean @default(false) // Manually curated high-quality stations
-  featured        Boolean @default(false) // Featured on homepage
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
-}
-
-model StationFeedback {
-  id            Int      @id @default(autoincrement())
-  stationId     Int      // Legacy reference during transition
-  stationNanoid String?  @db.VarChar(8) // New NanoID reference
-  userId        Int?     // Optional - allow anonymous feedback
-  feedbackType  String   // 'stream_not_working', 'poor_audio_quality', 'wrong_information', 'great_station', 'song_info_missing'
-  details       String?  // Additional feedback details
-  ipAddress     String?  // For rate limiting anonymous feedback
-  resolved      Boolean  @default(false) // Whether the feedback has been addressed
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-  
-  // Relations
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-}
-
-model Track {
-  id              String @id @default(cuid())
-  title           String
-  artist          String?
-  album           String?
-  artwork         String?
-  duration        Int?    // Duration in seconds
-  
-  // Deduplication fields
-  normalizedTitle String  // Lowercase, special chars removed
-  normalizedArtist String? // Lowercase, special chars removed
-  
-  // Rich metadata for song info pages
-  spotifyId       String? // Spotify track ID for streaming links
-  itunesId        String? // iTunes track ID for purchasing
-  genre           String? // Song genre
-  releaseDate     DateTime? // Album/single release date
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
-  
-  // Relations
-  playHistory     StationPlayHistory[]
-  
-  // Unique constraint for deduplication
-  @@unique([normalizedTitle, normalizedArtist])
-  @@index([normalizedTitle])
-  @@index([createdAt]) // Critical for daily cleanup
-}
-
-model StationPlayHistory {
-  id        String   @id @default(cuid())
-  stationId Int?     // Legacy station ID (temporary)
-  stationNanoid String? @db.VarChar(8) // Station NanoID (preferred)
-  trackId   String   // Track that was played
-  playedAt  DateTime @default(now())
-  source    String   // 'rogers', 'icecast', 'custom-api', etc.
-  
-  // Rich metadata context
-  showName     String? // Radio show name if available
-  djName       String? // DJ name if available
-  
-  // Relations
-  track   Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  
-  @@index([stationId, playedAt]) // Fast station queries (legacy)
-  @@index([stationNanoid, playedAt]) // Fast station queries (NanoID)
-  @@index([trackId, playedAt])   // Fast track queries
-  @@index([playedAt])            // Critical for daily cleanup
 }

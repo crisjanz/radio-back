@@ -93,11 +93,10 @@ async function loadStations() {
     try {
         console.log('Loading stations...');
         
-        // Check if we should include inactive stations
+        // Get the status filter
         const activeFilter = document.getElementById('filter-active')?.value || 'active';
-        const includeInactive = activeFilter === 'all' ? 'true' : 'false';
         
-        const response = await fetch(`/stations?includeInactive=${includeInactive}`);
+        const response = await fetch(`/stations?statusFilter=${activeFilter}`);
         console.log('Response status:', response.status);
         if (response.ok) {
             stations = await response.json();

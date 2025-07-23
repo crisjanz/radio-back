@@ -48,7 +48,8 @@ router.post('/download', async (req, res) => {
     try {
         const { url, size = 512 } = req.body;
         if (!url) {
-            return res.status(400).json({ error: 'Image URL is required' });
+            res.status(400).json({ error: 'Image URL is required' });
+            return;
         }
         console.log(`Downloading image for preview: ${url}`);
         const response = await (0, node_fetch_1.default)(url, {
@@ -59,7 +60,8 @@ router.post('/download', async (req, res) => {
             timeout: 10000,
         });
         if (!response.ok) {
-            return res.status(400).json({ error: `Failed to download image: ${response.statusText}` });
+            res.status(400).json({ error: `Failed to download image: ${response.statusText}` });
+            return;
         }
         const buffer = await response.arrayBuffer();
         const imageBuffer = Buffer.from(buffer);
@@ -115,7 +117,8 @@ router.post('/download/:stationId', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            res.status(400).json({ error: 'Invalid station ID format' });
+            return;
         }
         const { url: bodyUrl, size = 512 } = req.body;
         const queryUrl = req.query.url;
@@ -124,7 +127,8 @@ router.post('/download/:stationId', async (req, res) => {
             select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            res.status(404).json({ error: 'Station not found' });
+            return;
         }
         let imageUrl = url;
         if (!imageUrl) {
@@ -136,7 +140,8 @@ router.post('/download/:stationId', async (req, res) => {
             }
         }
         if (!imageUrl) {
-            return res.status(400).json({ error: 'No favicon or logo URL found for station' });
+            res.status(400).json({ error: 'No favicon or logo URL found for station' });
+            return;
         }
         const isForceRedownload = req.query.force === 'true';
         console.log(`${isForceRedownload ? 'Re-downloading' : 'Downloading'} image for station ${station.id}: ${imageUrl}`);
@@ -148,7 +153,8 @@ router.post('/download/:stationId', async (req, res) => {
             timeout: 10000,
         });
         if (!response.ok) {
-            return res.status(400).json({ error: `Failed to download image: ${response.statusText}` });
+            res.status(400).json({ error: `Failed to download image: ${response.statusText}` });
+            return;
         }
         const buffer = await response.arrayBuffer();
         const imageBuffer = Buffer.from(buffer);
@@ -229,18 +235,21 @@ router.post('/upload/:stationId', upload.single('image'), async (req, res) => {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
         if (idType === 'invalid') {
             console.log('❌ Invalid station ID format');
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            res.status(400).json({ error: 'Invalid station ID format' });
+            return;
         }
         if (!req.file) {
             console.log('❌ No image file provided');
-            return res.status(400).json({ error: 'No image file provided' });
+            res.status(400).json({ error: 'No image file provided' });
+            return;
         }
         console.log(`📄 File info: ${req.file.filename}, size: ${req.file.size}, path: ${req.file.path}`);
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, nanoid: true, name: true }
         });
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            res.status(404).json({ error: 'Station not found' });
+            return;
         }
         const originalMetadata = await (0, sharp_1.default)(req.file.path).metadata();
         console.log(`📋 Original uploaded file: ${originalMetadata.width}x${originalMetadata.height}, format: ${originalMetadata.format}, hasAlpha: ${originalMetadata.hasAlpha}`);
@@ -303,7 +312,8 @@ router.post('/batch-download', async (req, res) => {
     try {
         const { stationIds } = req.body;
         if (!Array.isArray(stationIds) || stationIds.length === 0) {
-            return res.status(400).json({ error: 'Invalid or empty station IDs array' });
+            res.status(400).json({ error: 'Invalid or empty station IDs array' });
+            return;
         }
         const results = [];
         for (const stationId of stationIds) {
@@ -369,13 +379,15 @@ router.get('/info/:stationId', async (req, res) => {
     try {
         const { stationIdParam, idType } = (0, station_lookup_1.parseStationIdParam)({ params: { id: req.params.stationId } });
         if (idType === 'invalid') {
-            return res.status(400).json({ error: 'Invalid station ID format' });
+            res.status(400).json({ error: 'Invalid station ID format' });
+            return;
         }
         const station = await (0, station_lookup_1.findStationByEitherId)(stationIdParam, {
             select: { id: true, nanoid: true, name: true, favicon: true, logo: true, local_image_url: true }
         });
         if (!station) {
-            return res.status(404).json({ error: 'Station not found' });
+            res.status(404).json({ error: 'Station not found' });
+            return;
         }
         let primaryImageUrl = null;
         let hasLocalImage = false;
